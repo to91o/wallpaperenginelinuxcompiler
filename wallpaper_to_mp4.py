@@ -16,6 +16,8 @@ import re
 import unicodedata
 import math
 import importlib.util
+import inspect
+import hashlib
 from platform_support import find_tool, package_hint
 
 VIDEO = {'.mp4', '.webm', '.mkv', '.mov', '.avi', '.gif', '.m4v'}
@@ -26,7 +28,7 @@ def use_local_environment():
     venv = Path(__file__).resolve().parent / '.venv'
     python = venv / 'bin' / 'python'
     if Path(sys.prefix).resolve() == venv.resolve():return
-    if any(flag in sys.argv for flag in ('--help', '-h', '--list-wallpapers', '--doctor')):return
+    if any(flag in sys.argv for flag in ('--help', '-h', '--list-wallpapers', '--doctor', '--refresh-previews', '--deduplicate-library')):return
     ready = python.is_file() and subprocess.run(
         [str(python),'-c','import lz4.block, moderngl, numpy, PIL, playwright.sync_api'],
         stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0
@@ -240,7 +242,17 @@ def create_thumbnail(output, log=print):
     fd, staging = tempfile.mkstemp(prefix='.thumbnail-', suffix='.jpg', dir=output.parent)
     os.close(fd)
     try:
-        result = subprocess.run([require('ffmpeg'), '-v', 'error', '-y', '-i', str(output),
+        seek = 0
+        probe = shutil.which('ffprobe')
+        if probe:
+            result = subprocess.run([probe, '-v', 'error', '-show_entries', 'format=duration',
+                                     '-of', 'default=noprint_wrappers=1:nokey=1', str(output)],
+                                    capture_output=True, text=True, timeout=10)
+            try:
+                duration = float(result.stdout)
+                if math.isfinite(duration) and duration > 0:seek = min(duration / 2, 5)
+            except ValueError:pass
+        result = subprocess.run([require('ffmpeg'), '-v', 'error', '-y', '-ss', str(seek), '-i', str(output),
                                  '-frames:v', '1', '-vf', 'scale=320:180:force_original_aspect_ratio=decrease',
                                  staging], capture_output=True, text=True, timeout=30)
         if result.returncode or not Path(staging).stat().st_size:
@@ -252,10 +264,93 @@ def create_thumbnail(output, log=print):
         Path(staging).unlink(missing_ok=True)
 
 
+def export_identity(source, settings):
+    source = Path(str(source).strip().strip('"\'')).expanduser().resolve()
+    target = source if source.is_dir() else source.parent if source.name in ('project.json', 'scene.pkg') else source
+    files = sorted(target.rglob('*')) if target.is_dir() else [target]
+    stamps = [[str(f.relative_to(target)) if target.is_dir() else f.name, f.stat().st_size, f.stat().st_mtime_ns]
+              for f in files if f.is_file() and not any(part in ('.git', '.venv', '__pycache__') for part in f.parts)]
+    return {'source': str(target), 'files': stamps, 'settings': settings}
+
+
 def convert(*args, **kwargs):
+    reuse = kwargs.pop('reuse_existing', False)
+    bound = inspect.signature(_convert).bind(*args, **kwargs); bound.apply_defaults()
+    values = bound.arguments
+    output = Path(values['output']).expanduser().resolve()
+    log = values['log']
+    settings = {k: v for k, v in values.items() if k not in ('source', 'output', 'log', 'cancel', 'overwrite')}
+    settings['assets'] = str(Path(settings['assets']).expanduser().resolve()) if settings['assets'] else None
+    identity = export_identity(values['source'], settings) if reuse else None
+    if reuse and not values['overwrite']:
+        for metadata in sorted(output.parent.glob('*.mp4.export.json')):
+            try:
+                record = json.loads(metadata.read_text())
+                candidate = Path(str(metadata)[:-len('.export.json')])
+                if record['identity'] == identity and candidate.is_file() and candidate.stat().st_size == record['size'] and candidate.stat().st_mtime_ns == record.get('mtime_ns'):
+                    if values['cancel'] and values['cancel'].is_set():raise ConversionError('Cancelled.')
+                    log(f'Already exported: {candidate}')
+                    thumbnail = Path(str(candidate) + '.jpg')
+                    if not thumbnail.is_file() or thumbnail.stat().st_mtime_ns < candidate.stat().st_mtime_ns:
+                        create_thumbnail(candidate, log)
+                    return candidate
+            except (OSError, ValueError, KeyError, TypeError):continue
     _convert(*args, **kwargs)
-    output = kwargs.get('output', args[1] if len(args) > 1 else None)
-    create_thumbnail(Path(output).expanduser().resolve(), kwargs.get('log', print))
+    create_thumbnail(output, log)
+    if identity is not None:
+        try:
+            fd, staging = tempfile.mkstemp(prefix='.export-index-', dir=output.parent)
+            try:
+                with os.fdopen(fd, 'w') as handle:json.dump({'identity': identity, 'size': output.stat().st_size, 'mtime_ns': output.stat().st_mtime_ns}, handle)
+                os.replace(staging, str(output) + '.export.json')
+            finally:Path(staging).unlink(missing_ok=True)
+        except OSError as e:log(f'Video saved, but repeat-export index could not be saved: {e}')
+    return output
+
+
+def refresh_previews(directory=None, log=print, cancel=None):
+    folder = Path(directory or library_directory()).expanduser().resolve()
+    if not folder.is_dir():raise ConversionError(f'Wallpaper folder does not exist: {folder}')
+    count = 0
+    for video in sorted(folder.iterdir()):
+        if cancel and cancel.is_set():raise ConversionError('Cancelled.')
+        if video.is_file() and video.suffix.lower() in VIDEO:
+            create_thumbnail(video, log); count += 1
+    log(f'Refreshed previews for {count} videos in {folder}. Click Refresh in KDE wallpaper settings.')
+
+
+
+def deduplicate_library(directory=None, log=print):
+    """Archive only byte-identical videos, retaining reversible copies."""
+    folder = Path(directory or library_directory()).expanduser().resolve()
+    if not folder.is_dir():raise ConversionError(f'Wallpaper folder does not exist: {folder}')
+    seen = {}; moved = 0
+    for video in sorted(folder.iterdir()):
+        if not video.is_file() or video.is_symlink() or video.suffix.lower() not in VIDEO:continue
+        digest = hashlib.sha256()
+        before = video.stat()
+        with video.open('rb') as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b''):digest.update(block)
+        if (before.st_size, before.st_mtime_ns) != (video.stat().st_size, video.stat().st_mtime_ns):
+            log(f'Skipped changing file: {video}'); continue
+        key = (before.st_size, digest.digest())
+        if key not in seen:
+            seen[key] = video; continue
+        archive = folder / '.duplicate-exports'; archive.mkdir(exist_ok=True)
+        # Link first to ensure existing archives are never overwritten.
+        destination = archive / video.name
+        number = 2
+        while any(Path(str(destination) + suffix).exists() for suffix in ('', '.jpg', '.export.json')):
+            destination = archive / f'{video.stem}_{number}{video.suffix}'; number += 1
+        for suffix in ('.jpg', '.export.json', ''):
+            source = Path(str(video) + suffix)
+            if source.is_file() and not source.is_symlink():
+                os.link(source, str(destination) + suffix)
+                source.unlink()
+        log(f'Archived duplicate {video.name}; kept {seen[key].name}')
+        moved += 1
+    log(f'Archived {moved} exact duplicates in {folder / ".duplicate-exports"}. Reselect the retained video if a moved copy was your active wallpaper.')
+    return moved
 
 
 def export_library(projects, directory=None, log=print, cancel=None, **settings):
@@ -272,7 +367,7 @@ def export_library(projects, directory=None, log=print, cancel=None, **settings)
                                   settings.get('height', 1080), settings.get('fps', 30),
                                   settings.get('seconds', 30), settings.get('supersample', 1))
         try:
-            convert(item['path'], output, log=log, cancel=cancel, overwrite=False, **settings)
+            output = convert(item['path'], output, log=log, cancel=cancel, overwrite=False, reuse_existing=True, **settings)
             report['exported'].append({'source': item['path'], 'output': str(output)})
         except KeyboardInterrupt:
             report['cancelled'] = True
@@ -533,6 +628,7 @@ def gui():
         selected=filedialog.askdirectory(title='Choose folder for automatically named exports',initialdir=str(Path.home()))
         if selected:output_folder.set(selected);update_filename();save_preferences()
     ttk.Button(naming_row,text='Choose wallpaper library folder',command=choose_output_folder).pack(side='left',padx=12)
+    ttk.Button(naming_row, text='Repair previews', command=lambda: start(previews=True)).pack(side='left', padx=8)
     ttk.Label(frame, text='All new videos are saved in this folder:').pack(anchor='w')
     ttk.Label(frame, textvariable=output_folder, wraplength=760).pack(anchor='w')
     for label, default in [('Duration (seconds)','30'), ('FPS','30'), ('Width','1920'), ('Height','1080'), ('CRF (quality)','18')]:
@@ -661,19 +757,20 @@ def gui():
     for name in ['Input','Width','Height','FPS','Duration (seconds)']:
         values[name].trace_add('write',schedule_filename)
     ss_var.trace_add('write',schedule_filename)
-    def start(batch=False):
+    def start(batch=False, previews=False):
+        if run.instate(['disabled']):return
         if auto_name.get():update_filename()
         try:
             kwargs = dict(source=values['Input'].get(), output=library_output(values['Output'].get(), output_folder.get()),
                 seconds=float(values['Duration (seconds)'].get()), fps=int(values['FPS'].get()),
                 width=int(values['Width'].get()), height=int(values['Height'].get()),
                 crf=int(values['CRF (quality)'].get()), assets=values['Assets folder'].get() or None,
-                overwrite=False if auto_name.get() else overwrite.get(), log=lambda s: events.put(('status',s)), cancel=cancelled,
+                overwrite=False if auto_name.get() else overwrite.get(), reuse_existing=auto_name.get(), log=lambda s: events.put(('status',s)), cancel=cancelled,
                 mode='gpu' if show_preview.get() else 'isolated', hide_clock=hide_clock.get(),
                 msaa=4, supersample=int(ss_var.get()))
         except (ValueError, ConversionError) as e:
             messagebox.showerror('Invalid settings', str(e)); return
-        apply_after_export = apply_kde.get() and not batch
+        apply_after_export = apply_kde.get() and not batch and not previews
         batch_projects = list(projects)
         batch_folder = output_folder.get()
         if batch and not batch_projects:
@@ -681,11 +778,13 @@ def gui():
         cancelled.clear(); run.configure(state='disabled'); batch_run.configure(state='disabled'); cancel_button.configure(state='normal')
         def worker():
             try:
-                if batch:
-                    for key in ('source', 'output', 'overwrite'):kwargs.pop(key)
+                if previews:
+                    refresh_previews(batch_folder, kwargs['log'], cancelled)
+                elif batch:
+                    for key in ('source', 'output', 'overwrite', 'reuse_existing'):kwargs.pop(key)
                     export_library(batch_projects, batch_folder, **kwargs)
                 else:
-                    convert(**kwargs)
+                    kwargs['output'] = convert(**kwargs)
                 if apply_after_export and not cancelled.is_set():
                     apply_kde_wallpaper(kwargs['output'], kwargs['log'])
             except Exception as e:
@@ -733,6 +832,8 @@ def main():
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('--apply-kde', action='store_true', help='After export, apply MP4 to all Plasma desktops using the installed plugin')
     parser.add_argument('--doctor', action='store_true', help='Report dependency presence as JSON without setup or a GUI')
+    parser.add_argument('--deduplicate-library', action='store_true', help='Archive byte-identical video copies in .duplicate-exports (reversible)')
+    parser.add_argument('--refresh-previews', action='store_true', help='Rebuild previews for existing videos in the shared folder')
     parser.add_argument('--export-library', action='store_true', help='Export all discovered projects to one folder; report unsupported/failed inputs')
     parser.add_argument('--list-wallpapers',action='store_true',help='List automatically discovered installed wallpapers as JSON')
     parser.add_argument('--steam-folder',action='append',default=[],help='Additional Steam library or wallpaper folder')
@@ -750,6 +851,14 @@ def main():
     if args.list_wallpapers:
         from steam_sync import scan
         print(json.dumps(scan(args.steam_folder),indent=2));return
+    if args.deduplicate_library:
+        try:deduplicate_library(args.output_dir)
+        except (ConversionError, OSError, KeyboardInterrupt) as e:parser.exit(1, f'Error: {e}\n')
+        return
+    if args.refresh_previews:
+        try:refresh_previews(args.output_dir)
+        except (ConversionError, OSError, KeyboardInterrupt) as e:parser.exit(1, f'Error: {e}\n')
+        return
     if args.export_library:
         if args.input or args.output or args.gui or args.apply_kde or args.overwrite:
             parser.error('--export-library uses --output-dir and does not accept input/output, --gui, --apply-kde or --overwrite')
@@ -775,14 +884,15 @@ def main():
             parser.exit(1, f'Error: {e}\n')
         return
     if args.output and args.output_dir:parser.error('Use an output filename or --output-dir, not both.')
+    automatic = not args.output
     if not args.output:
         args.output=str(automatic_output(args.input,args.output_dir,args.width,args.height,args.fps,args.seconds,args.supersample))
         args.overwrite=False
     try:
-        convert(args.input, args.output, args.seconds, args.fps, args.width, args.height,
+        saved = convert(args.input, args.output, args.seconds, args.fps, args.width, args.height,
                 args.crf, args.assets, args.warmup, args.overwrite, mode=args.mode, hide_clock=args.hide_clock,
-                msaa=args.msaa, supersample=args.supersample)
-        if args.apply_kde:apply_kde_wallpaper(args.output)
+                msaa=args.msaa, supersample=args.supersample, reuse_existing=automatic)
+        if args.apply_kde:apply_kde_wallpaper(saved)
     except (ConversionError, OSError, KeyboardInterrupt) as e:
         parser.exit(1, f'Error: {e}\n')
 

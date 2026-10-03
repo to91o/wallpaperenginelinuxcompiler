@@ -42,6 +42,9 @@ class ExportTests(unittest.TestCase):
             self.assertTrue(Path(exported['output']).is_file())
             self.assertTrue(Path(exported['output'] + '.jpg').stat().st_size > 0)
         self.assertEqual(json.loads(next(out.glob('export-report-*.json')).read_text()), report)
+        repeat = app.export_library(projects, out, seconds=.2, fps=10, width=32, height=32, log=lambda _: None)
+        self.assertEqual([x['output'] for x in report['exported']], [x['output'] for x in repeat['exported']])
+        self.assertEqual(len(list(out.glob('*.mp4'))), 2)
         cancel = threading.Event(); cancel.set()
         cancelled = app.export_library(projects, out, cancel=cancel, log=lambda _: None)
         self.assertTrue(cancelled['cancelled'])
@@ -64,6 +67,34 @@ class ExportTests(unittest.TestCase):
         for name in ('../outside.mp4', '/tmp/outside.mp4', '', 'sub/video.mp4'):
             with self.subTest(name=name), self.assertRaises(app.ConversionError):
                 app.library_output(name, target)
+
+    def test_duplicate_archiving_preserves_different_videos_and_sidecars(self):
+        (self.root / 'one.mp4').write_bytes(b'same video')
+        (self.root / 'one_2.mp4').write_bytes(b'same video')
+        (self.root / 'two.mp4').write_bytes(b'different video')
+        (self.root / 'one_2.mp4.jpg').write_bytes(b'preview')
+        self.assertEqual(app.deduplicate_library(self.root, log=lambda _: None), 1)
+        self.assertTrue((self.root / 'one.mp4').exists())
+        self.assertTrue((self.root / 'two.mp4').exists())
+        self.assertFalse((self.root / 'one_2.mp4').exists())
+        self.assertEqual((self.root / '.duplicate-exports/one_2.mp4').read_bytes(), b'same video')
+        self.assertEqual((self.root / '.duplicate-exports/one_2.mp4.jpg').read_bytes(), b'preview')
+        self.assertEqual(app.deduplicate_library(self.root, log=lambda _: None), 0)
+
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'), 'FFmpeg required')
+    def test_preview_samples_after_black_intro(self):
+        video = self.root / 'intro.mp4'
+        subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=black:s=32x32:r=10:d=0.5',
+                        '-f', 'lavfi', '-i', 'color=red:s=32x32:r=10:d=0.5',
+                        '-filter_complex', '[0:v][1:v]concat=n=2:v=1:a=0', '-pix_fmt', 'yuv420p',
+                        str(video)], check=True)
+        app.refresh_previews(self.root, log=lambda _: None)
+        thumbnail = Path(str(video) + '.jpg')
+        self.assertTrue(thumbnail.is_file())
+        raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(thumbnail), '-f', 'rawvideo',
+                              '-pix_fmt', 'rgb24', 'pipe:1'], check=True, capture_output=True).stdout
+        self.assertGreater(sum(raw[0::3]) / len(raw[0::3]), 150)
+        self.assertLess(sum(raw[1::3]) / len(raw[1::3]), 50)
 
     def test_invalid_metadata_is_actionable(self):
         for data in ([], None, {'type': 'video', 'file': 3},

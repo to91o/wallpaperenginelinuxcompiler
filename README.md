@@ -155,7 +155,7 @@ CLI equivalent:
 bash launch.sh --export-library --output-dir "$HOME/Videos/WallpaperExports"
 ```
 
-Add `--steam-folder /path/to/SteamLibrary` for another library. Video exports include a sidecar `filename.mp4.jpg` thumbnail; thumbnail failures do not discard a successful MP4. Each batch writes an `export-report-*.json` listing successful files, failures and unprocessed projects. CLI returns failure if any project fails. Repeating a batch creates numbered exports rather than overwriting or skipping previous ones.
+Add `--steam-folder /path/to/SteamLibrary` for another library. Video exports include a sidecar `filename.mp4.jpg` thumbnail; thumbnail failures do not discard a successful MP4. Each batch writes an `export-report-*.json` listing successful files, failures and unprocessed projects. CLI returns failure if any project fails. Repeating an unchanged batch reuses exports indexed by this version, instead of creating numbered copies. Source file changes or export-setting changes create a new version. Older, unindexed exports are preserved.
 
 Install or upgrade the plugin with `bash install.sh`. In KDE's wallpaper settings choose **Plasma Video Wallpaper**, set **Wallpaper folder** to the same export folder, and click a video thumbnail, then **Apply**. Click **Refresh** after new exports if necessary. Videos without thumbnails remain selectable. You can also enter a video path manually.
 
@@ -202,3 +202,23 @@ The standalone KDE plugin and converter are also distributed as separate GHCR fi
 The KDE gallery uses larger preview tiles and readable wallpaper titles, with full export filenames available on hover. Export settings and clock options scroll on smaller displays. Applying a video from the converter also sets the plugin’s wallpaper folder to the video’s parent folder. Actual Plasma appearance still needs desktop validation.
 
 Gallery troubleshooting: use **Choose folder…** to select the directory containing exported MP4 files, not the original Steam project folders. The settings show the resolved path and video count. Empty saved settings fall back to `~/Videos/WallpaperExports`; typed `~/`, quoted paths and file URLs are accepted. Folder paths with `#` or `%` are handled through a Qt FolderListModel escaping workaround. The folder picker additionally requires QtQuick.Dialogs (on Mint, matching package `qml6-module-qtquick-dialogs`).
+
+## Preview repair and duplicate cleanup
+
+Use **Repair previews** in the converter to rebuild JPEG previews for the selected library folder, or run:
+
+```fish
+bash launch.sh --refresh-previews
+```
+
+Previews sample a frame halfway through short videos or at five seconds in longer videos, reducing black first-frame previews. Click **Refresh** in KDE settings afterward. This can also generate previews for existing local videos that were not exported by the converter. Videos must decode through FFmpeg.
+
+Automatic single and batch exports now reuse an unchanged source/settings match recorded in `.mp4.export.json` sidecars. Explicit CLI filenames and manual GUI names retain overwrite/collision controls. Do not remove the export-index sidecars if you want repeat-export detection. Copies made by older versions are not automatically identified by title.
+
+To archive existing byte-identical video copies without deleting them:
+
+```fish
+bash launch.sh --deduplicate-library
+```
+
+Use `--output-dir /path/to/library` for either command to override the saved folder. Duplicate videos and their sidecars move to `.duplicate-exports` inside that folder, preserving a reversible copy and leaving one video in the gallery. Different resolutions, durations or differently encoded files are retained. If a moved copy was your active wallpaper, select the retained copy and Apply. Files outside the library are unaffected.

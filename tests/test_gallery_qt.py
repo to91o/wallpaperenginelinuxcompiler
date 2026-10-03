@@ -58,6 +58,17 @@ class GalleryTests(unittest.TestCase):
             self.assertIn(True, ready, 'A sidecar thumbnail must load for a path containing # and %')
             self.assertTrue(QMetaObject.invokeMethod(delegates[0], 'clicked'))
             self.assertEqual(root.property('cfg_VideoFile'), delegates[0].property('filePath'))
+            self.assertTrue(preview.save(str(folder / 'two.Mp4.jpg')))
+            refresh = next(obj for obj in visuals if obj.property('text') == 'Refresh')
+            self.assertTrue(QMetaObject.invokeMethod(refresh, 'clicked'))
+            self.settle()
+            refreshed = []; pending = [root]
+            while pending:
+                item = pending.pop(); refreshed.append(item); pending.extend(item.childItems())
+            previews = [obj for obj in refreshed if obj.metaObject().className().startswith('QQuickImage')
+                        and str(obj.property('source').toLocalFile()).endswith('.jpg')]
+            self.assertEqual(len(previews), 2)
+            self.assertTrue(all(QQmlExpression(engine.rootContext(), obj, 'status === 1').evaluate()[0] for obj in previews))
             root.setProperty('cfg_LibraryFolder', '')
             self.assertEqual(root.property('libraryPath'), root.property('defaultLibrary'))
             expression = QQmlExpression(engine.rootContext(), root, "normalizeFolder('~/Videos/WallpaperExports')")
