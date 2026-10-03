@@ -1,6 +1,6 @@
 # Wallpaper Engine to MP4 — Linux
 
-**Very early alpha — a vibecoding project.** Features and compatibility are still evolving; expect bugs and rough edges.
+**Very early alpha - purely a vibecoding passion project.** Features and compatibility are still evolving; expect bugs and rough edges.
 
 Export video, image, extracted web and **supported** Wallpaper Engine scenes to H.264 MP4 on Linux. Designed for Arch Linux and KDE Plasma 6 Wayland. A separate custom renderer handles Moon Workshop 3453730450; shared export controls and the KDE live-clock plugin work across supported wallpapers.
 
