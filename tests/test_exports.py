@@ -22,6 +22,32 @@ class ExportTests(unittest.TestCase):
         path.write_text(json.dumps(data))
         return path
 
+    @unittest.skipUnless(shutil.which('ffmpeg'), 'FFmpeg required')
+    def test_batch_exports_supported_projects_and_reports_failures(self):
+        projects = []
+        for name, kind in [('one', 'video'), ('unsupported', 'application'), ('two', 'video')]:
+            folder = self.root / name; folder.mkdir()
+            (folder / 'project.json').write_text(json.dumps({'title': name, 'type': kind, 'file': 'clip.mp4'}))
+            if kind == 'video':
+                subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=red:s=32x32:r=10',
+                                '-t', '0.2', '-pix_fmt', 'yuv420p', str(folder / 'clip.mp4')], check=True)
+            projects.append({'title': name, 'path': str(folder)})
+        out = self.root / 'gallery'
+        report = app.export_library(projects, out, seconds=.2, fps=10, width=32, height=32, log=lambda _: None)
+        self.assertEqual(len(report['exported']), 2)
+        self.assertEqual(len(report['failed']), 1)
+        self.assertEqual(report['unprocessed'], 0)
+        self.assertIn('Windows application', report['failed'][0]['error'])
+        for exported in report['exported']:
+            self.assertTrue(Path(exported['output']).is_file())
+            self.assertTrue(Path(exported['output'] + '.jpg').stat().st_size > 0)
+        self.assertEqual(json.loads(next(out.glob('export-report-*.json')).read_text()), report)
+        cancel = threading.Event(); cancel.set()
+        cancelled = app.export_library(projects, out, cancel=cancel, log=lambda _: None)
+        self.assertTrue(cancelled['cancelled'])
+        self.assertEqual(cancelled['unprocessed'], 3)
+        self.assertEqual(len(list(out.glob('*.mp4'))), 2)
+
     def test_invalid_metadata_is_actionable(self):
         for data in ([], None, {'type': 'video', 'file': 3},
                      {'type': 'scene', 'general': None},

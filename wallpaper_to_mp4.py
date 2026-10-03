@@ -213,7 +213,65 @@ def stop(process):
         process.kill()
         process.wait()
 
-def convert(source, output, seconds=30, fps=30, width=1920, height=1080,
+def create_thumbnail(output, log=print):
+    """Create a sidecar preview for the KDE gallery; video success is independent."""
+    output = Path(output)
+    fd, staging = tempfile.mkstemp(prefix='.thumbnail-', suffix='.jpg', dir=output.parent)
+    os.close(fd)
+    try:
+        result = subprocess.run([require('ffmpeg'), '-v', 'error', '-y', '-i', str(output),
+                                 '-frames:v', '1', '-vf', 'scale=320:180:force_original_aspect_ratio=decrease',
+                                 staging], capture_output=True, text=True, timeout=30)
+        if result.returncode or not Path(staging).stat().st_size:
+            raise ConversionError(result.stderr[-1000:] or 'No thumbnail frame')
+        os.replace(staging, str(output) + '.jpg')
+    except (OSError, ConversionError, subprocess.TimeoutExpired) as e:
+        log(f'Video saved, but gallery thumbnail could not be created: {e}')
+    finally:
+        Path(staging).unlink(missing_ok=True)
+
+
+def convert(*args, **kwargs):
+    _convert(*args, **kwargs)
+    output = kwargs.get('output', args[1] if len(args) > 1 else None)
+    create_thumbnail(Path(output).expanduser().resolve(), kwargs.get('log', print))
+
+
+def export_library(projects, directory=None, log=print, cancel=None, **settings):
+    """Export discovered projects sequentially; preserve failures and partial success."""
+    folder = Path(directory or Path.home() / 'Videos/WallpaperExports').expanduser().resolve()
+    folder.mkdir(parents=True, exist_ok=True)
+    report = {'exported': [], 'failed': [], 'cancelled': False, 'total': len(projects)}
+    for index, item in enumerate(projects):
+        if cancel and cancel.is_set():
+            report['cancelled'] = True
+            break
+        log(f'Library: {index + 1}/{len(projects)} — {item["title"]}')
+        output = automatic_output(item['path'], folder, settings.get('width', 1920),
+                                  settings.get('height', 1080), settings.get('fps', 30),
+                                  settings.get('seconds', 30), settings.get('supersample', 1))
+        try:
+            convert(item['path'], output, log=log, cancel=cancel, overwrite=False, **settings)
+            report['exported'].append({'source': item['path'], 'output': str(output)})
+        except KeyboardInterrupt:
+            report['cancelled'] = True
+            break
+        except (ConversionError, OSError, RuntimeError, subprocess.SubprocessError) as e:
+            if cancel and cancel.is_set():
+                report['cancelled'] = True
+                break
+            report['failed'].append({'source': item['path'], 'error': str(e)})
+            log(f'Not exported: {item["title"]}: {e}')
+    report['unprocessed'] = report['total'] - len(report['exported']) - len(report['failed'])
+    fd, path = tempfile.mkstemp(prefix='export-report-', suffix='.json', dir=folder)
+    with os.fdopen(fd, 'w') as handle:
+        json.dump(report, handle, indent=2, ensure_ascii=False)
+    log(f'Library: {len(report["exported"])} exported, {len(report["failed"])} failed, '
+        f'{report["unprocessed"]} unprocessed. Report: {path}')
+    return report
+
+
+def _convert(source, output, seconds=30, fps=30, width=1920, height=1080,
             crf=18, assets=None, warmup=3, overwrite=False, log=print, cancel=None, mode="isolated", hide_clock=False,
             msaa=4, supersample=1):
     if not math.isfinite(seconds) or seconds <= 0 or not 1 <= fps <= 120 or width < 2 or height < 2 or width % 2 or height % 2:
@@ -570,7 +628,7 @@ def gui():
     for name in ['Input','Width','Height','FPS','Duration (seconds)']:
         values[name].trace_add('write',schedule_filename)
     ss_var.trace_add('write',schedule_filename)
-    def start():
+    def start(batch=False):
         if auto_name.get():update_filename()
         try:
             kwargs = dict(source=values['Input'].get(), output=values['Output'].get(),
@@ -582,11 +640,19 @@ def gui():
                 msaa=4, supersample=int(ss_var.get()))
         except ValueError:
             messagebox.showerror('Invalid settings', 'Enter valid numeric settings.'); return
-        apply_after_export = apply_kde.get()
-        cancelled.clear(); run.configure(state='disabled'); cancel_button.configure(state='normal')
+        apply_after_export = apply_kde.get() and not batch
+        batch_projects = list(projects)
+        batch_folder = output_folder.get()
+        if batch and not batch_projects:
+            messagebox.showinfo('No wallpapers', 'Refresh the library or add a project folder first.'); return
+        cancelled.clear(); run.configure(state='disabled'); batch_run.configure(state='disabled'); cancel_button.configure(state='normal')
         def worker():
             try:
-                convert(**kwargs)
+                if batch:
+                    for key in ('source', 'output', 'overwrite'):kwargs.pop(key)
+                    export_library(batch_projects, batch_folder, **kwargs)
+                else:
+                    convert(**kwargs)
                 if apply_after_export and not cancelled.is_set():
                     apply_kde_wallpaper(kwargs['output'], kwargs['log'])
             except Exception as e:
@@ -596,6 +662,8 @@ def gui():
         threading.Thread(target=worker, daemon=False).start()
     buttons = ttk.Frame(frame); buttons.pack(fill='x')
     run = ttk.Button(buttons, text='Export MP4', command=start); run.pack(side='left')
+    batch_run = ttk.Button(buttons, text='Export entire library to folder', command=lambda: start(True))
+    batch_run.pack(side='left', padx=8)
     cancel_button = ttk.Button(buttons, text='Cancel', command=cancelled.set, state='disabled'); cancel_button.pack(side='left', padx=8)
     def poll():
         nonlocal projects,scan_running,last_active
@@ -616,7 +684,7 @@ def gui():
                     if active[0]!=last_active or values['Input'].get()!=active[0]:values['Input'].set(active[0])
                     last_active=active[0]
             elif kind == 'library_error':scan_running=False;sync_status.set(value)
-            else: run.configure(state='normal'); cancel_button.configure(state='disabled'); update_filename()
+            else: run.configure(state='normal'); batch_run.configure(state='normal'); cancel_button.configure(state='disabled'); update_filename()
         root.after(150,poll)
     def close():
         cancelled.set()
@@ -632,6 +700,7 @@ def main():
     parser.add_argument('--gui', action='store_true')
     parser.add_argument('--apply-kde', action='store_true', help='After export, apply MP4 to all Plasma desktops using the installed plugin')
     parser.add_argument('--doctor', action='store_true', help='Report dependency presence as JSON without setup or a GUI')
+    parser.add_argument('--export-library', action='store_true', help='Export all discovered projects to one folder; report unsupported/failed inputs')
     parser.add_argument('--list-wallpapers',action='store_true',help='List automatically discovered installed wallpapers as JSON')
     parser.add_argument('--steam-folder',action='append',default=[],help='Additional Steam library or wallpaper folder')
     parser.add_argument('--output-dir',help='Export folder for automatic naming when output filename is omitted')
@@ -648,6 +717,22 @@ def main():
     if args.list_wallpapers:
         from steam_sync import scan
         print(json.dumps(scan(args.steam_folder),indent=2));return
+    if args.export_library:
+        if args.input or args.output or args.gui or args.apply_kde or args.overwrite:
+            parser.error('--export-library uses --output-dir and does not accept input/output, --gui, --apply-kde or --overwrite')
+        from steam_sync import scan
+        library = scan(args.steam_folder)
+        if not library['projects']:parser.exit(1, 'No installed wallpaper projects found. Use --steam-folder to add a library or project folder.\n')
+        for warning in library['warnings']:print(f'Discovery warning: {warning}')
+        try:
+            report = export_library(library['projects'], args.output_dir, seconds=args.seconds,
+                fps=args.fps, width=args.width, height=args.height, crf=args.crf,
+                assets=args.assets or next(iter(library['assets']), None), warmup=args.warmup,
+                mode=args.mode, hide_clock=args.hide_clock, msaa=args.msaa, supersample=args.supersample)
+        except (ConversionError, OSError, KeyboardInterrupt) as e:
+            parser.exit(1, f'Error: {e}\n')
+        if report['failed'] or report['cancelled']:parser.exit(1)
+        return
     if args.gui or not args.input:
         try:
             gui()

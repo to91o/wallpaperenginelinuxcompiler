@@ -1,9 +1,19 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtCore
+import Qt.labs.folderlistmodel
 
 ColumnLayout {
     id: root
+    property string cfg_LibraryFolder
+    property bool refreshing: false
+    readonly property string libraryPath: String(cfg_LibraryFolder || "").trim()
+    readonly property string folderUrl: libraryPath.charAt(0) === "/"
+        ? "file://" + encodeURI(libraryPath).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
+    Component.onCompleted: {
+        if (!cfg_LibraryFolder) cfg_LibraryFolder = StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/Videos/WallpaperExports";
+    }
     property string cfg_VideoFile
     property real cfg_ClockX
     property real cfg_ClockY
@@ -16,6 +26,64 @@ ColumnLayout {
     property bool cfg_ShowClock
     property bool cfg_ShowCalendar
     Label { text: "Plasma Video Wallpaper"; font.bold: true }
+    Label { text: "Video library folder" }
+    RowLayout {
+        TextField {
+            Layout.fillWidth: true
+            text: root.cfg_LibraryFolder
+            onTextEdited: root.cfg_LibraryFolder = text
+            placeholderText: StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/Videos/WallpaperExports"
+        }
+        Button { text: "Refresh"; onClicked: { root.refreshing = true; refreshTimer.restart(); } }
+    }
+    Timer { id: refreshTimer; interval: 100; onTriggered: root.refreshing = false }
+    FolderListModel {
+        id: library
+        folder: root.refreshing ? "" : root.folderUrl
+        nameFilters: ["*.mp4", "*.webm", "*.mkv", "*.mov", "*.m4v", "*.MP4", "*.WEBM", "*.MKV"]
+        showDirs: false
+        showHidden: false
+        sortField: FolderListModel.Name
+    }
+    ScrollView {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 220
+        clip: true
+        GridView {
+            id: gallery
+            model: library
+            cellWidth: Math.max(150, Math.floor(width / Math.max(1, Math.floor(width / 180))))
+            cellHeight: 130
+            delegate: ItemDelegate {
+                required property string fileName
+                required property string filePath
+                required property url fileUrl
+                width: gallery.cellWidth - 8
+                height: gallery.cellHeight - 8
+                highlighted: root.cfg_VideoFile === filePath || root.cfg_VideoFile === String(fileUrl)
+                onClicked: root.cfg_VideoFile = filePath
+                contentItem: ColumnLayout {
+                    Image {
+                        id: thumbnail
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 85
+                        source: String(fileUrl) + ".jpg"
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false
+                        Label { anchors.centerIn: parent; visible: thumbnail.status === Image.Error; text: "Video" }
+                    }
+                    Label { Layout.fillWidth: true; text: fileName; elide: Text.ElideMiddle }
+                }
+            }
+        }
+    }
+    Label {
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        visible: library.count === 0
+        text: "No videos found. Export wallpapers to this folder, or choose a folder containing existing videos, then Refresh."
+    }
     Label { text: "Local video path (absolute, without quotes or ~)" }
     TextField { Layout.fillWidth: true; text: root.cfg_VideoFile; onTextEdited: root.cfg_VideoFile = text; placeholderText: "/home/user/Videos/wallpaper.mp4" }
     Label { text: "Clock position — percentage from the left and top" }
