@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtCore
+import QtQuick.Dialogs as Dialogs
 import Qt.labs.folderlistmodel
 
 ScrollView {
@@ -10,12 +11,24 @@ ScrollView {
     contentWidth: availableWidth
     property string cfg_LibraryFolder
     property bool refreshing: false
-    readonly property string libraryPath: String(cfg_LibraryFolder || "").trim()
-    readonly property string folderUrl: libraryPath.charAt(0) === "/"
-        ? "file://" + encodeURI(libraryPath).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
-    Component.onCompleted: {
-        if (!cfg_LibraryFolder) cfg_LibraryFolder = StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/Videos/WallpaperExports";
+    readonly property string homePath: StandardPaths.writableLocation(StandardPaths.HomeLocation)
+    readonly property string defaultLibrary: homePath + "/Videos/WallpaperExports"
+    function normalizeFolder(value) {
+        let path = String(value || "").trim();
+        if ((path.startsWith('"') && path.endsWith('"')) || (path.startsWith("'") && path.endsWith("'")))
+            path = path.slice(1, -1);
+        if (!path) return defaultLibrary;
+        if (path.startsWith("file://")) {
+            try { path = decodeURIComponent(path.replace(/^file:\/\/(?:localhost)?/, "")); }
+            catch (e) { return ""; }
+        }
+        if (path === "~") path = homePath;
+        if (path.startsWith("~/")) path = homePath + path.slice(1);
+        return path;
     }
+    readonly property string libraryPath: normalizeFolder(cfg_LibraryFolder)
+    readonly property url folderUrl: libraryPath.charAt(0) === "/"
+        ? "file://" + encodeURI(libraryPath).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
     property string cfg_VideoFile
     property real cfg_ClockX
     property real cfg_ClockY
@@ -34,17 +47,33 @@ ScrollView {
     RowLayout {
         TextField {
             Layout.fillWidth: true
-            text: root.cfg_LibraryFolder
+            text: root.cfg_LibraryFolder || root.defaultLibrary
             onTextEdited: root.cfg_LibraryFolder = text
             placeholderText: StandardPaths.writableLocation(StandardPaths.HomeLocation) + "/Videos/WallpaperExports"
         }
+        Button { text: "Choose folder…"; onClicked: folderPicker.open() }
         Button { text: "Refresh"; onClicked: { root.refreshing = true; refreshTimer.restart(); } }
+    }
+    Dialogs.FolderDialog {
+        id: folderPicker
+        title: "Choose the folder containing exported videos"
+        currentFolder: root.folderUrl
+        onAccepted: root.cfg_LibraryFolder = root.normalizeFolder(selectedFolder)
+    }
+    Label {
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        text: String(root.folderUrl) === "" ? "Enter an absolute folder path or use Choose folder."
+            : library.status === FolderListModel.Loading ? "Reading " + root.libraryPath
+            : library.count + " videos in " + root.libraryPath
     }
     Timer { id: refreshTimer; interval: 100; onTriggered: root.refreshing = false }
     FolderListModel {
         id: library
-        folder: root.refreshing ? "" : root.folderUrl
-        nameFilters: ["*.mp4", "*.webm", "*.mkv", "*.mov", "*.m4v", "*.MP4", "*.WEBM", "*.MKV"]
+        // Qt 6 FolderListModel reparses its decoded local path as a URL.
+        // Preserve escaping through that second parse (not needed by FolderDialog).
+        folder: root.refreshing ? "" : String(root.folderUrl).replace(/%/g, "%25")
+        nameFilters: ["*.[mM][pP]4", "*.[wW][eE][bB][mM]", "*.[mM][kK][vV]", "*.[mM][oO][vV]", "*.[mM]4[vV]"]
         showDirs: false
         showHidden: false
         sortField: FolderListModel.Name
@@ -90,7 +119,7 @@ ScrollView {
         Layout.fillWidth: true
         wrapMode: Text.Wrap
         visible: library.count === 0
-        text: "Your library is empty. Export wallpapers into this folder, then click Refresh."
+        text: "No playable video files were found here. Choose the folder containing your MP4 exports (not the Steam project folders), then Refresh. Subfolders are not scanned."
     }
     Label { text: "Selected wallpaper (full file path)" }
     TextField { Layout.fillWidth: true; text: root.cfg_VideoFile; onTextEdited: root.cfg_VideoFile = text; placeholderText: "/home/user/Videos/wallpaper.mp4" }
