@@ -194,3 +194,7 @@ This update verified headless Chromium canvas motion with 2× supersampling and 
 This cloud machine has no Plasma session, linux-wallpaperengine, or original Moon assets. Actual KDE playback/application, hidden and visible general-scene rendering, and Moon rendering require validation on the target desktop. Successful exports from one scene do not establish compatibility with other scenes.
 
 Code is MIT licensed; original wallpaper/assets retain their creators' rights. This project is not affiliated with Wallpaper Engine.
+
+## GitHub Packages
+
+The standalone KDE plugin and converter are also distributed as separate GHCR file packages. See [package instructions](packaging/README.md). They contain installable project files, not a runnable desktop container; release ZIPs remain the recommended download.
