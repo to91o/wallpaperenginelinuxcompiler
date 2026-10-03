@@ -1,0 +1,17 @@
+{
+  "KPlugin": {
+    "Id": "org.talal.moonlive",
+    "Name": "Video Wallpaper + Live Clock",
+    "Description": "Play any local video wallpaper with a live clock, date, and calendar",
+    "Version": "1.1",
+    "License": "MIT",
+    "Authors": [
+      {
+        "Name": "Talal"
+      }
+    ],
+    "Icon": "preferences-system-time"
+  },
+  "KPackageStructure": "Plasma/Wallpaper",
+  "X-Plasma-API": "declarativeappletscript"
+}
