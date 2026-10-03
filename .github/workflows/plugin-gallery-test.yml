@@ -4,11 +4,13 @@ on:
     paths:
       - 'plugin/**'
       - 'tests/test_gallery_qt.py'
+      - 'tests/test_pause_qt.py'
       - '.github/workflows/plugin-gallery-test.yml'
   pull_request:
     paths:
       - 'plugin/**'
       - 'tests/test_gallery_qt.py'
+      - 'tests/test_pause_qt.py'
       - '.github/workflows/plugin-gallery-test.yml'
 permissions:
   contents: read
@@ -25,4 +27,4 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
           QT_QUICK_BACKEND: software
-        run: /tmp/gallery-test-runtime/bin/python -m unittest discover -s tests -p test_gallery_qt.py -v
+        run: /tmp/gallery-test-runtime/bin/python -m unittest discover -s tests -p 'test_*_qt.py' -v

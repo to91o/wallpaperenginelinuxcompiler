@@ -29,6 +29,10 @@ ScrollView {
     readonly property string libraryPath: normalizeFolder(cfg_LibraryFolder)
     readonly property url folderUrl: libraryPath.charAt(0) === "/"
         ? "file://" + encodeURI(libraryPath).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
+    property alias cfg_PausePlayback: optionPausePlayback.checked
+    property alias cfg_PauseFullscreen: optionPauseFullscreen.checked
+    property alias cfg_PauseMaximized: optionPauseMaximized.checked
+    property alias cfg_PauseWhenHidden: optionPauseWhenHidden.checked
     property string cfg_VideoFile
     property real cfg_ClockX
     property real cfg_ClockY
@@ -45,6 +49,22 @@ ScrollView {
     Label { text: "Video wallpapers"; font.bold: true }
     Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Turn off the live overlay below to hide its clock, date, calendar and accent line. This is separate from a clock embedded in the video." }
     CheckBox { id: optionShowClock; objectName: "optionShowClock"; text: "Show clock, date and calendar" }
+    GroupBox {
+        title: "Playback and automatic pause"
+        Layout.fillWidth: true
+        ColumnLayout {
+            anchors.fill: parent
+            CheckBox { id: optionPausePlayback; text: "Pause video now" }
+            CheckBox { id: optionPauseFullscreen; text: "Pause when a window is fullscreen" }
+            CheckBox { id: optionPauseMaximized; text: "Pause when a window is maximized" }
+            CheckBox { id: optionPauseWhenHidden; text: "Pause when Plasma hides the wallpaper" }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: "Window rules apply to this screen, desktop and activity. Playback resumes automatically; the live clock keeps updating."
+            }
+        }
+    }
     Label { text: "Wallpaper folder" }
     RowLayout {
         TextField {

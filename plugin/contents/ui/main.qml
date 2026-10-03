@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Window
 import QtMultimedia
 import org.kde.plasma.plasmoid
 
@@ -9,6 +10,25 @@ WallpaperItem {
     readonly property int monthDays: new Date(currentTime.getFullYear(), currentTime.getMonth() + 1, 0).getDate()
     readonly property real calendarCell: Math.max(22, configuration.ClockSize * .85)
     readonly property string videoPath: String(configuration.VideoFile || "").trim()
+    readonly property bool pauseRequested: Boolean(configuration.PausePlayback) ||
+        (Boolean(configuration.PauseWhenHidden) && !visible) ||
+        (autoPause.item !== null && autoPause.item.shouldPause)
+    onPauseRequestedChanged: Qt.callLater(syncPlayback)
+    function syncPlayback() {
+        if (String(player.source) === "") return;
+        if (pauseRequested) player.pause();
+        else player.play();
+    }
+    Loader {
+        id: autoPause
+        active: Boolean(root.configuration.PauseFullscreen) || Boolean(root.configuration.PauseMaximized)
+        source: "AutoPause.qml"
+        onLoaded: {
+            item.pauseFullscreen = Qt.binding(function() { return Boolean(root.configuration.PauseFullscreen); });
+            item.pauseMaximized = Qt.binding(function() { return Boolean(root.configuration.PauseMaximized); });
+            item.screenGeometry = Qt.binding(function() { return Qt.rect(root.Screen.virtualX, root.Screen.virtualY, root.Screen.width, root.Screen.height); });
+        }
+    }
     function asUrl(path) {
         if (path === "") return "";
         if (path.indexOf("file:") === 0) return path;
@@ -22,8 +42,8 @@ WallpaperItem {
         source: root.asUrl(root.videoPath)
         videoOutput: video
         loops: MediaPlayer.Infinite
-        onSourceChanged: { if (String(source) !== "") play(); }
-        Component.onCompleted: { if (String(source) !== "") play(); }
+        onSourceChanged: Qt.callLater(root.syncPlayback)
+        Component.onCompleted: Qt.callLater(root.syncPlayback)
         // No AudioOutput: desktop wallpaper remains silent.
     }
     Timer { interval: 250; running: true; repeat: true; onTriggered: root.currentTime = new Date() }
@@ -102,6 +122,13 @@ WallpaperItem {
                 }
             }
         }
+    }
+    Text {
+        anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+        anchors.margins: 16
+        wrapMode: Text.Wrap; color: "white"
+        visible: autoPause.active && autoPause.status === Loader.Error
+        text: "Window-based pause is unavailable: Plasma's TaskManager module could not load. Manual pause remains available."
     }
     Text {
         anchors.centerIn: parent; width: parent.width * .8; wrapMode: Text.Wrap

@@ -29,3 +29,9 @@ Requires QtCore and Qt.labs.folderlistmodel QML modules in addition to the playb
 Gallery troubleshooting: use **Choose folder…** to select the directory containing exported MP4 files, not the original Steam project folders. The settings show the resolved path and video count. Empty saved settings fall back to `~/Videos/WallpaperExports`; typed `~/`, quoted paths and file URLs are accepted. Folder paths with `#` or `%` are handled through a Qt FolderListModel escaping workaround. The folder picker additionally requires QtQuick.Dialogs (on Mint, matching package `qml6-module-qtquick-dialogs`).
 
 The **Show clock, date and calendar** toggle is at the top of wallpaper settings, above the folder gallery. Turn it off and click Apply to remove the entire live overlay, including the accent line. Further clock appearance settings are below the gallery. This cannot remove a clock already baked into a video.
+
+## Playback and automatic pause
+
+The settings menu includes **Pause video now**, **Pause when a window is fullscreen**, **Pause when a window is maximized**, and **Pause when Plasma hides the wallpaper**. All default to off and are saved per wallpaper/monitor. Window rules use Plasma's TaskManager model, filtered to this screen, current virtual desktop and activity, with minimized windows excluded. Playback resumes when the blocking state clears, without restarting the video. The clock overlay continues to update while video playback is paused.
+
+Window tracking requires the `org.kde.taskmanager` QML module supplied by Plasma. The hidden-wallpaper rule follows Plasma's item visibility; it does not promise separate lock-screen, battery or every occlusion signal. Automatic pause policy was tested with a real Qt model; TaskManager integration still needs verification on a Plasma desktop.
