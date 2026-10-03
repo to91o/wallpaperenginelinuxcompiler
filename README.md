@@ -90,6 +90,8 @@ Visible GPU capture remains available only when explicitly selected with **Show 
 
 ## Export and apply to KDE
 
+The standalone **Plasma Video Wallpaper** plugin is included in [`plugin/`](plugin/README.md). It needs neither the converter nor Wallpaper Engine; it can play existing local videos from any source. Codec support depends on Qt Multimedia.
+
 Install the included Plasma 6 plugin once:
 
 ```fish
@@ -107,7 +109,7 @@ bash launch.sh /path/to/wallpaper --seconds 30 --width 2560 --height 1440 --appl
 
 An application failure leaves the exported MP4 saved and reports that desktop application could not be confirmed. The plugin plays videos silently. It does not restore the previous wallpaper automatically.
 
-For manual selection: right-click the desktop → Configure Desktop and Wallpaper → **Video Wallpaper + Live Clock**, enter the permanent absolute MP4 path, and Apply. Configure each monitor separately. Log out/in if the plugin is not listed. Plugin ID `org.talal.moonlive` is retained for upgrades. It accepts any local MP4 and adds a live system clock, weekday/date and optional current-month calendar, with Monday first and today highlighted. MP4 exports alone have no live clock; clocks baked into video pixels cannot be removed by this plugin.
+For manual selection: right-click the desktop → Configure Desktop and Wallpaper → **Plasma Video Wallpaper**, enter the permanent absolute MP4 path, and Apply. Configure each monitor separately. Log out/in if the plugin is not listed. Plugin ID `org.talal.moonlive` is retained for upgrades. It independently plays local videos supported by Qt Multimedia (including MP4 and supported WebM/MKV files) and adds a live system clock, weekday/date and optional current-month calendar, with Monday first and today highlighted. MP4 exports alone have no live clock; clocks baked into video pixels cannot be removed by this plugin.
 
 ## Supported inputs
 

@@ -1,9 +1,9 @@
 {
   "KPlugin": {
     "Id": "org.talal.moonlive",
-    "Name": "Video Wallpaper + Live Clock",
-    "Description": "Play any local video wallpaper with a live clock, date, and calendar",
-    "Version": "1.1",
+    "Name": "Plasma Video Wallpaper",
+    "Description": "Loop local videos with optional live clock, date, and calendar on Plasma 6",
+    "Version": "1.2",
     "License": "MIT",
     "Authors": [
       {

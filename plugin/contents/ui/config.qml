@@ -15,9 +15,9 @@ ColumnLayout {
     property bool cfg_ShowDate
     property bool cfg_ShowClock
     property bool cfg_ShowCalendar
-    Label { text: "Looping video with a live system clock"; font.bold: true }
-    Label { text: "MP4 path (absolute, without quotes or ~)" }
-    TextField { Layout.fillWidth: true; text: root.cfg_VideoFile; onTextEdited: root.cfg_VideoFile = text; placeholderText: "/home/talal/wallpaper.mp4" }
+    Label { text: "Plasma Video Wallpaper"; font.bold: true }
+    Label { text: "Local video path (absolute, without quotes or ~)" }
+    TextField { Layout.fillWidth: true; text: root.cfg_VideoFile; onTextEdited: root.cfg_VideoFile = text; placeholderText: "/home/user/Videos/wallpaper.mp4" }
     Label { text: "Clock position — percentage from the left and top" }
     RowLayout {
         Label { text: "X" }
@@ -42,6 +42,6 @@ ColumnLayout {
     CheckBox { text: "Show current month calendar"; checked: root.cfg_ShowCalendar; onToggled: root.cfg_ShowCalendar = checked }
     CheckBox { text: "Show seconds"; checked: root.cfg_ShowSeconds; onToggled: root.cfg_ShowSeconds = checked }
     CheckBox { text: "12-hour time"; checked: root.cfg_Use12Hour; onToggled: root.cfg_Use12Hour = checked }
-    Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Works with any local MP4. Clock, date, and calendar use your computer's timezone and remain live while the video loops. If the source video already contains a clock, that baked-in clock remains visible." }
+    Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Works with local videos supported by your Qt Multimedia backend, including MP4 and supported WebM/MKV files. No Wallpaper Engine or converter is required. Clock, date, and calendar use your computer's timezone and remain live while the video loops. If the source video already contains a clock, that baked-in clock remains visible." }
     Item { Layout.fillHeight: true }
 }

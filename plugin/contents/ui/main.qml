@@ -108,6 +108,6 @@ WallpaperItem {
         horizontalAlignment: Text.AlignHCenter; color: "white"; font.pixelSize: 20
         visible: root.videoPath === "" || player.error !== MediaPlayer.NoError || root.asUrl(root.videoPath) === ""
         text: player.error !== MediaPlayer.NoError ? "Could not play video: " + player.errorString
-            : "Configure this wallpaper and paste an absolute MP4 path, such as /home/talal/wallpaper.mp4."
+            : "Configure this wallpaper and paste an absolute local video path, such as /home/user/Videos/wallpaper.mp4."
     }
 }
