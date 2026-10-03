@@ -105,7 +105,8 @@ def apply_kde_wallpaper(output, log=print):
     script = 'print((function() { try { var ds = desktops(); if (!ds.length) throw new Error("No Plasma desktops found");' + \
         'for (var i=0; i<ds.length; i++) { var d=ds[i]; d.wallpaperPlugin=' + json.dumps(plugin) + \
         '; d.currentConfigGroup=["Wallpaper",' + json.dumps(plugin) + ',"General"];' + \
-        'd.writeConfig("VideoFile",' + json.dumps(str(output)) + '); }' + \
+        'd.writeConfig("VideoFile",' + json.dumps(str(output)) + ');' + \
+        'd.writeConfig("LibraryFolder",' + json.dumps(str(output.parent)) + '); }' + \
         'return JSON.stringify({ok:true, desktops:ds.length});' + \
         '} catch(e) { return JSON.stringify({ok:false, error:String(e)}); } })());'
     try:
@@ -138,6 +139,26 @@ def apply_kde_wallpaper(output, log=print):
 
 
 
+def library_directory():
+    """Use the saved shared export folder for GUI and CLI defaults."""
+    try:
+        saved = json.loads((Path.home() / '.config/wallpaper-to-mp4/settings.json').read_text())
+        folder = saved.get('output_folder')
+        if isinstance(folder, str) and folder.strip():
+            return Path(folder).expanduser().resolve()
+    except (OSError, ValueError, AttributeError):
+        pass
+    return Path.home() / 'Videos/WallpaperExports'
+
+
+def library_output(filename, directory):
+    """GUI filenames stay in the selected shared folder."""
+    filename = str(filename).strip()
+    if not filename or Path(filename).name != filename or filename in ('.', '..'):
+        raise ConversionError('Enter a file name, not a path. Choose the wallpaper folder separately.')
+    return Path(directory).expanduser().resolve() / filename
+
+
 def automatic_output(source, directory=None, width=1920, height=1080, fps=30, seconds=30, supersample=1):
     """Propose a readable, safe, unused filename without creating or overwriting files."""
     path=Path(str(source).strip().strip('\"\'')).expanduser()
@@ -153,7 +174,7 @@ def automatic_output(source, directory=None, width=1920, height=1080, fps=30, se
     title=re.sub(r'[\s_]+','_',title).strip('._ ')
     title=title.encode('utf-8')[:100].decode('utf-8',errors='ignore').rstrip('._') or 'wallpaper'
     stem=f'{title}_{width}x{height}_{fps}fps_{seconds:g}s' + ('_ss2' if supersample==2 else '')
-    folder=Path(directory or Path.home()/'Videos/WallpaperExports').expanduser().resolve()
+    folder=Path(directory or library_directory()).expanduser().resolve()
     result=folder/(stem+'.mp4');number=2
     while result.exists() or result.is_symlink():
         result=folder/f'{stem}_{number}.mp4';number+=1
@@ -239,7 +260,7 @@ def convert(*args, **kwargs):
 
 def export_library(projects, directory=None, log=print, cancel=None, **settings):
     """Export discovered projects sequentially; preserve failures and partial success."""
-    folder = Path(directory or Path.home() / 'Videos/WallpaperExports').expanduser().resolve()
+    folder = Path(directory or library_directory()).expanduser().resolve()
     folder.mkdir(parents=True, exist_ok=True)
     report = {'exported': [], 'failed': [], 'cancelled': False, 'total': len(projects)}
     for index, item in enumerate(projects):
@@ -476,38 +497,48 @@ def gui():
         root = tk.Tk()
     except tk.TclError as e:
         raise ConversionError('GUI needs a desktop display. Run from your KDE terminal, or use CLI export arguments.') from e
-    root.title('Wallpaper → MP4 — Linux'); root.geometry('840x890')
+    root.title('Wallpaper Exporter'); root.geometry('900x800')
     notebook = ttk.Notebook(root); notebook.pack(fill='both',expand=True)
-    frame = ttk.Frame(notebook, padding=18)
+    export_tab = ttk.Frame(notebook)
+    canvas = tk.Canvas(export_tab, highlightthickness=0)
+    scrollbar = ttk.Scrollbar(export_tab, orient='vertical', command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side='right', fill='y'); canvas.pack(side='left', fill='both', expand=True)
+    frame = ttk.Frame(canvas, padding=18)
+    canvas_window = canvas.create_window((0, 0), window=frame, anchor='nw')
+    frame.bind('<Configure>', lambda event: canvas.configure(scrollregion=canvas.bbox('all')))
+    canvas.bind('<Configure>', lambda event: canvas.itemconfigure(canvas_window, width=event.width))
     library_frame = ttk.Frame(notebook,padding=18)
-    notebook.add(frame,text='Export'); notebook.add(library_frame,text='Wallpaper Engine library')
+    notebook.add(export_tab,text='Create wallpaper'); notebook.add(library_frame,text='Installed wallpapers')
     values = {}; entries = {}; browse_buttons = {}
     def field(label, default, browse=None):
         row = ttk.Frame(frame); row.pack(fill='x', pady=4)
-        ttk.Label(row, text=label, width=18).pack(side='left')
+        ttk.Label(row, text={'Input':'Wallpaper source', 'Output':'Video file name', 'Duration (seconds)':'Length (seconds)', 'FPS':'Frame rate (fps)', 'CRF (quality)':'Quality (lower = better)', 'Assets folder':'Renderer assets (optional)'}.get(label, label), width=24).pack(side='left')
         var = tk.StringVar(value=default); values[label] = var
         entry=ttk.Entry(row,textvariable=var);entries[label]=entry
         entry.pack(side='left', fill='x', expand=True)
         if browse:
             button=ttk.Button(row,text='Browse',command=lambda: var.set(browse() or var.get()))
             browse_buttons[label]=button;button.pack(side='left',padx=4)
-    ttk.Label(frame, text='Wallpaper Engine to MP4', font=('', 18, 'bold')).pack(anchor='w', pady=(0,12))
+    ttk.Label(frame, text='Create a video wallpaper', font=('', 18, 'bold')).pack(anchor='w', pady=(0,12))
     field('Input', '', lambda: filedialog.askopenfilename(title='Choose project.json, scene.pkg, HTML, image, or video'))
-    ttk.Button(frame, text='Select project folder', command=lambda: values['Input'].set(filedialog.askdirectory() or values['Input'].get())).pack(anchor='e')
-    field('Output', str(Path.home() / 'wallpaper.mp4'), lambda: filedialog.asksaveasfilename(defaultextension='.mp4'))
+    ttk.Button(frame, text='Choose wallpaper folder', command=lambda: values['Input'].set(filedialog.askdirectory() or values['Input'].get())).pack(anchor='e')
+    field('Output', 'wallpaper.mp4', lambda: Path(filedialog.asksaveasfilename(initialdir=output_folder.get(), defaultextension='.mp4')).name)
     auto_name=tk.BooleanVar(value=True)
-    output_folder=tk.StringVar(value=str(Path.home()/'Videos/WallpaperExports'))
+    output_folder=tk.StringVar(value=str(library_directory()))
     naming_row=ttk.Frame(frame);naming_row.pack(fill='x',pady=4)
-    ttk.Checkbutton(naming_row,text='Automatic file naming',variable=auto_name,
+    ttk.Checkbutton(naming_row,text='Name videos automatically',variable=auto_name,
                     command=lambda: (update_filename(),save_preferences())).pack(side='left')
     def choose_output_folder():
         selected=filedialog.askdirectory(title='Choose folder for automatically named exports',initialdir=str(Path.home()))
         if selected:output_folder.set(selected);update_filename();save_preferences()
-    ttk.Button(naming_row,text='Choose export folder',command=choose_output_folder).pack(side='left',padx=12)
+    ttk.Button(naming_row,text='Choose wallpaper library folder',command=choose_output_folder).pack(side='left',padx=12)
+    ttk.Label(frame, text='All new videos are saved in this folder:').pack(anchor='w')
+    ttk.Label(frame, textvariable=output_folder, wraplength=760).pack(anchor='w')
     for label, default in [('Duration (seconds)','30'), ('FPS','30'), ('Width','1920'), ('Height','1080'), ('CRF (quality)','18')]:
         field(label, default)
     preset_row = ttk.Frame(frame); preset_row.pack(fill='x', pady=4)
-    ttk.Label(preset_row, text='Resolution preset', width=18).pack(side='left')
+    ttk.Label(preset_row, text='Video size', width=18).pack(side='left')
     preset_var = tk.StringVar(value='1080p')
     presets = {'1080p':(1920,1080), '1440p':(2560,1440), '4K':(3840,2160)}
     preset_box = ttk.Combobox(preset_row, textvariable=preset_var, values=list(presets), state='readonly')
@@ -518,7 +549,7 @@ def gui():
     ss_var = tk.StringVar(value='1')
     for label,var,choices in [('Supersampling',ss_var,['1','2'])]:
         row = ttk.Frame(frame); row.pack(fill='x', pady=4)
-        ttk.Label(row,text=label,width=24).pack(side='left')
+        ttk.Label(row,text='Extra smoothing' if label == 'Supersampling' else label,width=24).pack(side='left')
         ttk.Combobox(row,textvariable=var,values=choices,state='readonly').pack(side='left')
     ttk.Label(frame,text='2×: scenes/web render at twice the width/height, then downsample. Export takes longer.').pack(anchor='w')
     ttk.Label(frame,text='Video/image sources use Lanczos resampling; their original detail cannot be increased.').pack(anchor='w')
@@ -527,14 +558,14 @@ def gui():
     ttk.Label(frame, text='Exports run without a desktop preview. Hidden scene rendering may be slower.').pack(anchor='w')
     show_preview = tk.BooleanVar(value=False)
     mode_row = ttk.Frame(frame); mode_row.pack(fill='x', pady=4)
-    ttk.Checkbutton(mode_row,text='Show preview window for scene GPU capture (keep visible during export)',
+    ttk.Checkbutton(mode_row,text='Use a visible GPU window for scene export (optional)',
                     variable=show_preview).pack(side='left')
     hide_clock = tk.BooleanVar(value=False)
-    ttk.Checkbutton(frame, text="Hide original clock when the project exposes a 'clock' property", variable=hide_clock).pack(anchor='w')
+    ttk.Checkbutton(frame, text='Hide the source clock when supported', variable=hide_clock).pack(anchor='w')
     apply_kde = tk.BooleanVar(value=False)
-    ttk.Checkbutton(frame, text='Use finished MP4 as wallpaper on all KDE desktops (requires installed plugin)',
+    ttk.Checkbutton(frame, text='Apply finished wallpaper to all KDE desktops',
                     variable=apply_kde).pack(anchor='w')
-    overwrite = tk.BooleanVar(); ttk.Checkbutton(frame, text='Overwrite existing output', variable=overwrite).pack(anchor='w')
+    overwrite = tk.BooleanVar(); ttk.Checkbutton(frame, text='Replace an existing video (manual names only)', variable=overwrite).pack(anchor='w')
     status = tk.StringVar(value='Ready'); ttk.Label(frame, textvariable=status, wraplength=640).pack(anchor='w', pady=8)
     events = queue.Queue(); cancelled = threading.Event()
     # Scan in a worker so slower Steam drives never block the interface.
@@ -557,11 +588,11 @@ def gui():
             preferences.write_text(json.dumps({'folders':extra,'auto_sync':auto_sync.get(),'follow_active':follow.get(),
                                               'auto_name':auto_name.get(),'output_folder':output_folder.get()},indent=2))
         except OSError as e:sync_status.set(f'Could not save preferences: {e}')
-    ttk.Label(library_frame,text='Installed Wallpaper Engine wallpapers',font=('',17,'bold')).pack(anchor='w')
+    ttk.Label(library_frame,text='Your installed wallpapers',font=('',17,'bold')).pack(anchor='w')
     ttk.Label(library_frame,text='Finds native Steam, Flatpak Steam, and additional Steam libraries.').pack(anchor='w',pady=8)
     switches=ttk.Frame(library_frame);switches.pack(fill='x')
-    ttk.Checkbutton(switches,text='Auto-sync every 15 seconds',variable=auto_sync,command=save_preferences).pack(side='left')
-    ttk.Checkbutton(switches,text='Follow saved active wallpaper',variable=follow,command=save_preferences).pack(side='left',padx=12)
+    ttk.Checkbutton(switches,text='Refresh library automatically',variable=auto_sync,command=save_preferences).pack(side='left')
+    ttk.Checkbutton(switches,text='Select Wallpaper Engine’s saved wallpaper',variable=follow,command=save_preferences).pack(side='left',padx=12)
     ttk.Label(library_frame,text='Follow updates Input while idle. It does not change your desktop or start exports.').pack(anchor='w',pady=6)
     toolbar=ttk.Frame(library_frame);toolbar.pack(fill='x',pady=6)
     ttk.Label(toolbar,text='Search').pack(side='left')
@@ -586,9 +617,9 @@ def gui():
         if selected:
             follow.set(False);save_preferences()
             values['Input'].set(projects[int(selected[0])]['path'])
-            notebook.select(frame)
+            notebook.select(export_tab)
     tree.bind('<Double-1>',choose_project)
-    ttk.Button(buttons_library,text='Use selected wallpaper',command=choose_project).pack(side='left')
+    ttk.Button(buttons_library,text='Choose selected wallpaper',command=choose_project).pack(side='left')
     def refresh_library():
         nonlocal scan_running
         if scan_running:return
@@ -611,11 +642,13 @@ def gui():
     def update_filename():
         entries['Output'].configure(state='readonly' if auto_name.get() else 'normal')
         browse_buttons['Output'].configure(state='disabled' if auto_name.get() else 'normal')
-        if not auto_name.get():return
+        if not auto_name.get():
+            values['Output'].set(Path(values['Output'].get()).name)
+            return
         try:
             path=automatic_output(values['Input'].get(),output_folder.get(),int(values['Width'].get()),
                 int(values['Height'].get()),int(values['FPS'].get()),float(values['Duration (seconds)'].get()),int(ss_var.get()))
-            values['Output'].set(str(path))
+            values['Output'].set(path.name)
         except (ValueError,OSError):pass
     def schedule_filename(*unused):
         nonlocal pending_name
@@ -631,15 +664,15 @@ def gui():
     def start(batch=False):
         if auto_name.get():update_filename()
         try:
-            kwargs = dict(source=values['Input'].get(), output=values['Output'].get(),
+            kwargs = dict(source=values['Input'].get(), output=library_output(values['Output'].get(), output_folder.get()),
                 seconds=float(values['Duration (seconds)'].get()), fps=int(values['FPS'].get()),
                 width=int(values['Width'].get()), height=int(values['Height'].get()),
                 crf=int(values['CRF (quality)'].get()), assets=values['Assets folder'].get() or None,
                 overwrite=False if auto_name.get() else overwrite.get(), log=lambda s: events.put(('status',s)), cancel=cancelled,
                 mode='gpu' if show_preview.get() else 'isolated', hide_clock=hide_clock.get(),
                 msaa=4, supersample=int(ss_var.get()))
-        except ValueError:
-            messagebox.showerror('Invalid settings', 'Enter valid numeric settings.'); return
+        except (ValueError, ConversionError) as e:
+            messagebox.showerror('Invalid settings', str(e)); return
         apply_after_export = apply_kde.get() and not batch
         batch_projects = list(projects)
         batch_folder = output_folder.get()
@@ -661,8 +694,8 @@ def gui():
                 events.put(('done',None))
         threading.Thread(target=worker, daemon=False).start()
     buttons = ttk.Frame(frame); buttons.pack(fill='x')
-    run = ttk.Button(buttons, text='Export MP4', command=start); run.pack(side='left')
-    batch_run = ttk.Button(buttons, text='Export entire library to folder', command=lambda: start(True))
+    run = ttk.Button(buttons, text='Export wallpaper', command=start); run.pack(side='left')
+    batch_run = ttk.Button(buttons, text='Export all installed wallpapers', command=lambda: start(True))
     batch_run.pack(side='left', padx=8)
     cancel_button = ttk.Button(buttons, text='Cancel', command=cancelled.set, state='disabled'); cancel_button.pack(side='left', padx=8)
     def poll():

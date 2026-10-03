@@ -48,6 +48,23 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(cancelled['unprocessed'], 3)
         self.assertEqual(len(list(out.glob('*.mp4'))), 2)
 
+    def test_saved_folder_is_shared_by_cli_defaults(self):
+        home = self.root / 'home'
+        config = home / '.config/wallpaper-to-mp4'
+        config.mkdir(parents=True)
+        target = self.root / 'shared-library'
+        (config / 'settings.json').write_text(json.dumps({'output_folder': str(target)}))
+        with patch.object(app.Path, 'home', return_value=home):
+            self.assertEqual(app.library_directory(), target)
+            self.assertEqual(app.automatic_output(self.root).parent, target)
+
+    def test_gui_manual_filename_stays_in_library(self):
+        target = self.root / 'library'
+        self.assertEqual(app.library_output('custom.mp4', target), target / 'custom.mp4')
+        for name in ('../outside.mp4', '/tmp/outside.mp4', '', 'sub/video.mp4'):
+            with self.subTest(name=name), self.assertRaises(app.ConversionError):
+                app.library_output(name, target)
+
     def test_invalid_metadata_is_actionable(self):
         for data in ([], None, {'type': 'video', 'file': 3},
                      {'type': 'scene', 'general': None},
@@ -86,6 +103,8 @@ class ExportTests(unittest.TestCase):
             app.apply_kde_wallpaper(output, messages.append)
             script = run.call_args.args[0][-1]
             self.assertIn(json.dumps(str(output)), script)
+            self.assertIn('LibraryFolder', script)
+            self.assertIn(json.dumps(str(output.parent)), script)
             self.assertIn('2 Plasma desktops', messages[0])
         failure = subprocess.CompletedProcess([], 0, '{"ok":false,"error":"No Plasma desktops found"}', '')
         with patch.object(app, 'require', return_value='kpackagetool6'), \

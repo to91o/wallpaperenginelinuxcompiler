@@ -8,7 +8,7 @@ From the repository root, run `bash install.sh`. If you downloaded only the plug
 
 Requires Plasma 6, kpackagetool6 and Qt 6 Multimedia/QML with compatible codecs. On Arch, install `qt6-multimedia qt6-multimedia-ffmpeg`. On Mint with Plasma 6, use the same Qt package source as your desktop; typical packages include `kpackagetool6 qml6-module-qtmultimedia libqt6multimedia6`. See the repository README for Mint details. Do not install mismatched Qt libraries.
 
-Right-click the desktop → Configure Desktop and Wallpaper → **Plasma Video Wallpaper**. Set **Video library folder** (default `~/Videos/WallpaperExports`), click a video tile, then Apply. The folder setting needs an absolute path without `~`. Refresh after adding videos. You can also enter an absolute local video path manually. Configure each monitor separately. If the plugin is absent, reopen the wallpaper settings or log out/in.
+Right-click the desktop → Configure Desktop and Wallpaper → **Plasma Video Wallpaper**. Set **Wallpaper folder** (default `~/Videos/WallpaperExports`), click a video tile, then Apply. The folder setting needs an absolute path without `~`. Refresh after adding videos. You can also enter an absolute local video path manually. Configure each monitor separately. If the plugin is absent, reopen the wallpaper settings or log out/in.
 
 ## Videos and overlays
 

@@ -136,7 +136,7 @@ Wallpaper_Title_3840x2160_60fps_30s_ss2.mp4
 Wallpaper_Title_3840x2160_60fps_30s_2.mp4
 ```
 
-Names use the project title or source filename, preserve Unicode, clean invalid characters and number collisions. Automatic naming never overwrites existing files. GUI output-folder and naming preferences are saved. Disable automatic naming for a custom output path. CLI can omit the output filename or supply `--output-dir`; explicit output paths can use `--overwrite`. MP4 outputs are staged on the destination filesystem and published after successful encoding. Cancel removes partial staged files.
+Names use the project title or source filename, preserve Unicode, clean invalid characters and number collisions. Automatic naming never overwrites existing files. GUI exports always use the selected wallpaper library folder, including manual file names. The folder is displayed in the export tab and saved for subsequent GUI and default CLI exports. Explicit CLI output paths and `--output-dir` remain available. Disable automatic naming for a custom output path. CLI can omit the output filename or supply `--output-dir`; explicit output paths can use `--overwrite`. MP4 outputs are staged on the destination filesystem and published after successful encoding. Cancel removes partial staged files.
 
 ```fish
 bash launch.sh /path/to/project --output-dir "$HOME/Videos/WallpaperExports" --supersample 2
@@ -147,7 +147,7 @@ bash launch.sh /path/to/image.png /path/to/output.mp4 --seconds 10 --fps 30
 
 The converter and KDE plugin are separate components. The plugin can be installed on its own from `plugin/` using `bash install.sh`; the converter is needed only to create videos from wallpaper projects.
 
-In the converter, choose an export folder (default `~/Videos/WallpaperExports`), refresh the Steam library and click **Export entire library to folder**. This exports all discovered projects, including ones hidden by the search filter, one at a time using your current quality settings. Unsupported or failed wallpapers are reported and the remaining projects continue. Existing files are preserved with numbered filenames. Cancel stops the batch. There is no automatic download of wallpaper subscriptions.
+In the converter, choose an export folder (default `~/Videos/WallpaperExports`), refresh the Steam library and click **Export all installed wallpapers**. This exports all discovered projects, including ones hidden by the search filter, one at a time using your current quality settings. Unsupported or failed wallpapers are reported and the remaining projects continue. Existing files are preserved with numbered filenames. Cancel stops the batch. There is no automatic download of wallpaper subscriptions.
 
 CLI equivalent:
 
@@ -157,7 +157,7 @@ bash launch.sh --export-library --output-dir "$HOME/Videos/WallpaperExports"
 
 Add `--steam-folder /path/to/SteamLibrary` for another library. Video exports include a sidecar `filename.mp4.jpg` thumbnail; thumbnail failures do not discard a successful MP4. Each batch writes an `export-report-*.json` listing successful files, failures and unprocessed projects. CLI returns failure if any project fails. Repeating a batch creates numbered exports rather than overwriting or skipping previous ones.
 
-Install or upgrade the plugin with `bash install.sh`. In KDE's wallpaper settings choose **Plasma Video Wallpaper**, set **Video library folder** to the same export folder, and click a video thumbnail, then **Apply**. Click **Refresh** after new exports if necessary. Videos without thumbnails remain selectable. You can also enter a video path manually.
+Install or upgrade the plugin with `bash install.sh`. In KDE's wallpaper settings choose **Plasma Video Wallpaper**, set **Wallpaper folder** to the same export folder, and click a video thumbnail, then **Apply**. Click **Refresh** after new exports if necessary. Videos without thumbnails remain selectable. You can also enter a video path manually.
 
 These videos appear in the **Plasma Video Wallpaper** page, not KDE's built-in **Image** wallpaper gallery. The plugin does not render Wallpaper Engine scenes directly. All playable videos in the selected folder appear; unsupported scenes that failed export cannot appear as playable videos.
 
@@ -198,3 +198,5 @@ Code is MIT licensed; original wallpaper/assets retain their creators' rights. T
 ## GitHub Packages
 
 The standalone KDE plugin and converter are also distributed as separate GHCR file packages. See [package instructions](packaging/README.md). They contain installable project files, not a runnable desktop container; release ZIPs remain the recommended download.
+
+The KDE gallery uses larger preview tiles and readable wallpaper titles, with full export filenames available on hover. Export settings and clock options scroll on smaller displays. Applying a video from the converter also sets the plugin’s wallpaper folder to the video’s parent folder. Actual Plasma appearance still needs desktop validation.
