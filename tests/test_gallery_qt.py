@@ -32,6 +32,11 @@ class GalleryTests(unittest.TestCase):
         root.setProperty('width', 700); root.setProperty('height', 650)
         window = QQuickWindow(); window.resize(700, 650)
         root.setParentItem(window.contentItem()); window.show()
+        # Emulate Plasma wiring cfg property change signals to its Apply state.
+        change_events = []
+        root.cfg_PauseFocusedChanged.connect(lambda: change_events.append(True))
+        root.setProperty('cfg_PauseFocused', True)
+        self.assertTrue(change_events, 'KDE must receive a settings-change notification')
         root.setProperty('cfg_ShowClock', True)
         clock_toggle = root.findChild(QObject, 'optionShowClock')
         self.assertIsNotNone(clock_toggle)

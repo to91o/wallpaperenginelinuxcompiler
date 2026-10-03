@@ -37,3 +37,5 @@ The settings menu includes **Pause video now**, **Pause when a window is fullscr
 Window tracking requires the `org.kde.taskmanager` QML module supplied by Plasma. The hidden-wallpaper rule follows Plasma's item visibility; it does not promise separate lock-screen, battery or every occlusion signal. Automatic pause policy was tested with a real Qt model; TaskManager integration still needs verification on a Plasma desktop.
 
 **Pause when an application window is focused** also covers ordinary windowed apps, without requiring fullscreen or maximization. It uses the active, non-minimized window on this screen, virtual desktop and activity. Returning focus to the desktop resumes playback when no other pause rule applies. Off by default.
+
+If Apply stays greyed out after a plugin upgrade, Plasma may still have the previous settings schema cached. Switch Wallpaper type to Image and Apply, then switch back to Plasma Video Wallpaper. If the new pause settings are still unavailable, log out/in. The menu detects missing pause keys and explains this rather than presenting settings that cannot be saved.

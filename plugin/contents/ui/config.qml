@@ -9,6 +9,17 @@ ScrollView {
     id: root
     clip: true
     contentWidth: availableWidth
+    // Plasma passes these when constructing the wallpaper configuration page.
+    property var configDialog: null
+    property var wallpaperConfiguration: null
+    readonly property bool pauseSettingsAvailable: {
+        const config = configDialog && configDialog.wallpaperConfiguration
+            ? configDialog.wallpaperConfiguration : wallpaperConfiguration;
+        if (!config || typeof config.keys !== "function") return true;
+        const keys = config.keys();
+        return ["PausePlayback", "PauseFullscreen", "PauseMaximized", "PauseFocused", "PauseWhenHidden"]
+            .every(function(key) { return keys.indexOf(key) >= 0; });
+    }
     property string cfg_LibraryFolder
     property bool refreshing: false
     readonly property string homePath: StandardPaths.writableLocation(StandardPaths.HomeLocation)
@@ -55,11 +66,17 @@ ScrollView {
         Layout.fillWidth: true
         ColumnLayout {
             anchors.fill: parent
-            CheckBox { id: optionPausePlayback; text: "Pause video now" }
-            CheckBox { id: optionPauseFullscreen; text: "Pause when a window is fullscreen" }
-            CheckBox { id: optionPauseMaximized; text: "Pause when a window is maximized" }
-            CheckBox { id: optionPauseFocused; text: "Pause when an application window is focused" }
-            CheckBox { id: optionPauseWhenHidden; text: "Pause when Plasma hides the wallpaper" }
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                visible: !root.pauseSettingsAvailable
+                text: "Plasma still has the previous plugin settings loaded. Switch Wallpaper type to Image and Apply, then switch back to Plasma Video Wallpaper. If these options remain unavailable, log out and back in."
+            }
+            CheckBox { enabled: root.pauseSettingsAvailable; id: optionPausePlayback; text: "Pause video now" }
+            CheckBox { enabled: root.pauseSettingsAvailable; id: optionPauseFullscreen; text: "Pause when a window is fullscreen" }
+            CheckBox { enabled: root.pauseSettingsAvailable; id: optionPauseMaximized; text: "Pause when a window is maximized" }
+            CheckBox { enabled: root.pauseSettingsAvailable; id: optionPauseFocused; text: "Pause when an application window is focused" }
+            CheckBox { enabled: root.pauseSettingsAvailable; id: optionPauseWhenHidden; text: "Pause when Plasma hides the wallpaper" }
             Label {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap

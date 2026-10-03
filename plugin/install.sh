@@ -26,3 +26,4 @@ else
     "$package_tool" --type Plasma/Wallpaper --install "$PWD"
 fi
 printf '\nInstalled Plasma Video Wallpaper for your user.\nRight-click desktop → Configure Desktop and Wallpaper → Plasma Video Wallpaper.\n'
+printf '\nAfter an upgrade adding settings: close wallpaper settings and reopen. If Apply does not activate, switch to Image and Apply, then switch back to Plasma Video Wallpaper; log out/in if needed.\n'
