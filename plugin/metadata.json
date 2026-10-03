@@ -3,7 +3,7 @@
     "Id": "org.talal.moonlive",
     "Name": "Plasma Video Wallpaper",
     "Description": "Loop local videos with optional live clock, date, and calendar on Plasma 6",
-    "Version": "1.4.1",
+    "Version": "1.4.2",
     "License": "MIT",
     "Authors": [
       {

@@ -35,14 +35,16 @@ ScrollView {
     property int cfg_ClockSize
     property string cfg_ClockColor
     property string cfg_AccentColor
-    property bool cfg_ShowSeconds
-    property bool cfg_Use12Hour
-    property bool cfg_ShowDate
-    property bool cfg_ShowClock
-    property bool cfg_ShowCalendar
+    property alias cfg_ShowSeconds: optionShowSeconds.checked
+    property alias cfg_Use12Hour: optionUse12Hour.checked
+    property alias cfg_ShowDate: optionShowDate.checked
+    property alias cfg_ShowClock: optionShowClock.checked
+    property alias cfg_ShowCalendar: optionShowCalendar.checked
     ColumnLayout {
     width: root.availableWidth
     Label { text: "Video wallpapers"; font.bold: true }
+    Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Turn off the live overlay below to hide its clock, date, calendar and accent line. This is separate from a clock embedded in the video." }
+    CheckBox { id: optionShowClock; objectName: "optionShowClock"; text: "Show clock, date and calendar" }
     Label { text: "Wallpaper folder" }
     RowLayout {
         TextField {
@@ -142,11 +144,11 @@ ScrollView {
         Label { text: "Accent color" }
         TextField { text: root.cfg_AccentColor; onTextEdited: root.cfg_AccentColor = text }
     }
-    CheckBox { text: "Show clock"; checked: root.cfg_ShowClock; onToggled: root.cfg_ShowClock = checked }
-    CheckBox { text: "Show date"; checked: root.cfg_ShowDate; onToggled: root.cfg_ShowDate = checked }
-    CheckBox { text: "Show calendar"; checked: root.cfg_ShowCalendar; onToggled: root.cfg_ShowCalendar = checked }
-    CheckBox { text: "Show seconds"; checked: root.cfg_ShowSeconds; onToggled: root.cfg_ShowSeconds = checked }
-    CheckBox { text: "12-hour time"; checked: root.cfg_Use12Hour; onToggled: root.cfg_Use12Hour = checked }
+
+    CheckBox { id: optionShowDate; objectName: "optionShowDate"; text: "Show date" }
+    CheckBox { id: optionShowCalendar; objectName: "optionShowCalendar"; text: "Show calendar" }
+    CheckBox { id: optionShowSeconds; objectName: "optionShowSeconds"; text: "Show seconds" }
+    CheckBox { id: optionUse12Hour; objectName: "optionUse12Hour"; text: "12-hour time" }
     Label { Layout.fillWidth: true; wrapMode: Text.Wrap; text: "Works with local videos supported by your Qt Multimedia backend, including MP4 and supported WebM/MKV files. No Wallpaper Engine or converter is required. Clock, date, and calendar use your computer's timezone and remain live while the video loops. If the source video already contains a clock, that baked-in clock remains visible." }
     Item { Layout.fillHeight: true }
 }

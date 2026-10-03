@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 try:
-    from PySide6.QtCore import QObject, QEventLoop, QTimer, QUrl, QMetaObject
+    from PySide6.QtCore import QObject, QEventLoop, QTimer, QUrl, QMetaObject, QPointF
     from PySide6.QtGui import QGuiApplication, QImage
     from PySide6.QtQuick import QQuickWindow
     from PySide6.QtQml import QQmlApplicationEngine, QQmlExpression
@@ -32,6 +32,13 @@ class GalleryTests(unittest.TestCase):
         root.setProperty('width', 700); root.setProperty('height', 650)
         window = QQuickWindow(); window.resize(700, 650)
         root.setParentItem(window.contentItem()); window.show()
+        root.setProperty('cfg_ShowClock', True)
+        clock_toggle = root.findChild(QObject, 'optionShowClock')
+        self.assertIsNotNone(clock_toggle)
+        self.assertTrue(clock_toggle.property('checked'))
+        self.assertLess(clock_toggle.mapToScene(QPointF(0, 0)).y(), 150, 'Clock toggle must be visible above the gallery')
+        clock_toggle.setProperty('checked', False)
+        self.assertFalse(root.property('cfg_ShowClock'), 'The KDE cfg property must reflect turning off the overlay')
         with tempfile.TemporaryDirectory() as temp:
             folder = Path(temp) / 'Videos # percent%'; folder.mkdir()
             for name in ('one.mp4', 'two.Mp4', 'ignore.jpg'):
