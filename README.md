@@ -2,7 +2,7 @@
 
 **Very early alpha - purely a vibecoding passion project.** Features and compatibility are still evolving; expect bugs and rough edges.
 
-Export video, image, extracted web and **supported** Wallpaper Engine scenes to H.264 MP4 on Linux. Designed for Arch Linux and KDE Plasma 6 Wayland. A separate custom renderer handles Moon Workshop 3453730450; shared export controls and the KDE live-clock plugin work across supported wallpapers.
+Export video, image, extracted web and **supported** Wallpaper Engine scenes to H.264 MP4 on Linux. Targets Arch Linux and Linux Mint with KDE Plasma 6 Wayland (including 6.4.5); Mint desktop validation is pending. A separate custom renderer handles Moon Workshop 3453730450; shared export controls and the KDE live-clock plugin work across supported wallpapers.
 
 This is not a universal Wallpaper Engine compiler. General scenes depend on linux-wallpaperengine compatibility. Arbitrary shaders, SceneScript, effects, perspective cameras and Windows application wallpapers may not work. Unsupported inputs should be reported rather than silently replaced with a Moon render.
 
@@ -39,6 +39,47 @@ bash launch.sh --list-wallpapers --steam-folder /mnt/games/SteamLibrary
 
 `--doctor` reports command/module presence for the interpreter running it. To inspect the prepared app environment, use `.venv/bin/python wallpaper_to_mp4.py --doctor`. Presence does not prove driver, renderer or Plasma compatibility.
 
+## Linux Mint with KDE Plasma 6.4.5
+
+Mint support is experimental. This targets an existing **Plasma 6** installation, not Mint's default Cinnamon desktop. Do not install a different KDE version to use the converter. The scripts also work from fish via `bash`; no environment activation is needed.
+
+Install the shared export prerequisites:
+
+```fish
+sudo apt update
+sudo apt install python3 python3-venv python3-pip python3-tk ffmpeg libegl1 libgl1 libgl1-mesa-dri xvfb xdotool libglib2.0-bin
+bash setup.sh
+```
+
+For web exports, setup downloads Playwright Chromium if a system Chromium executable is unavailable. If the downloaded browser reports missing system libraries, install its supported dependencies explicitly:
+
+```fish
+.venv/bin/python -m playwright install-deps chromium
+```
+
+That Playwright command can request sudo; the app's own setup does not. A browser-download failure leaves other export paths usable.
+
+The KDE plugin needs `kpackagetool6` and **Qt 6 Multimedia/QML matching the Qt libraries used by your Plasma installation**. On Ubuntu-based Mint, the package names commonly include `kpackagetool6`, `qml6-module-qtmultimedia` and `libqt6multimedia6`. Check availability and source before installation:
+
+```fish
+plasmashell --version
+apt-cache policy kpackagetool6 qml6-module-qtmultimedia libqt6multimedia6
+```
+
+Use the same repository/source that supplied your Plasma 6.4.5 installation. If the packages are absent or their Qt versions conflict, resolve that through your KDE package source; do not mix Qt libraries from unrelated repositories. Then install the plugin:
+
+```fish
+bash install.sh
+bash launch.sh --doctor
+bash launch.sh
+```
+
+The installer discovers Qt tools outside PATH and rejects a detected Plasma 5 session. Export-and-apply supports qdbus6, Qt's private bin directories, or Mint's `gdbus` (`libglib2.0-bin`) fallback. It needs a running Plasma session; installing the plugin alone does not change the desktop wallpaper.
+
+For **general scene exports**, install a compatible `linux-wallpaperengine` build using its upstream instructions for your Ubuntu/Mint base and Plasma package source. The Arch AUR command does not apply on Mint. `--doctor` reports whether the renderer is discoverable. Video, image, web and the asset-specific Moon backend do not need that renderer. No automatic source build or promise of arbitrary scene compatibility is included.
+
+On your desktop, first export a short image or video with the KDE checkbox enabled. Confirm silent looping playback and the live clock/calendar, then test a supported scene with preview disabled. These are required desktop checks before Mint/Plasma support can be considered verified.
+
 ## No unwanted preview window
 
 Hidden export is the default. Video/image exports use FFmpeg, web uses headless Chromium, Moon uses headless EGL, and other supported scenes use a private Xvfb display. General-scene capture now waits for the renderer's window, checks its dimensions and captures that window. Missing windows stop the export rather than producing a blank screen capture. The private display does not use your desktop's Wayland display or X authority file, and is cleaned up afterward.
@@ -56,7 +97,7 @@ sudo pacman -S --needed qt6-multimedia qt6-multimedia-ffmpeg qt6-tools
 bash install.sh
 ```
 
-In the app, select **Use finished MP4 as wallpaper on all KDE desktops** to apply a successful export. This is off by default and explicitly changes the wallpaper on all Plasma desktop containments. Existing clock, date and calendar settings are retained. It requires an installed plugin, a running Plasma session and qdbus6 (or a compatible qdbus). It uses Plasma's D-Bus scripting API rather than editing configuration files behind Plasma.
+In the app, select **Use finished MP4 as wallpaper on all KDE desktops** to apply a successful export. This is off by default and explicitly changes the wallpaper on all Plasma desktop containments. Existing clock, date and calendar settings are retained. It requires an installed plugin, a running Plasma session and qdbus6, a compatible qdbus, or gdbus. It uses Plasma's D-Bus scripting API rather than editing configuration files behind Plasma.
 
 CLI example, usable in fish:
 

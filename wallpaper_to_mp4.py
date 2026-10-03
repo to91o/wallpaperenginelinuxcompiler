@@ -16,6 +16,7 @@ import re
 import unicodedata
 import math
 import importlib.util
+from platform_support import find_tool, package_hint
 
 VIDEO = {'.mp4', '.webm', '.mkv', '.mov', '.avi', '.gif', '.m4v'}
 IMAGES = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
@@ -64,10 +65,11 @@ def dependency_report():
     """Report capabilities without installing packages or opening a display."""
     commands = {name: shutil.which(name) is not None for name in
                 ('ffmpeg', 'ffprobe', 'chromium', 'chromium-browser',
-                 'linux-wallpaperengine', 'Xvfb', 'xdotool', 'kpackagetool6', 'qdbus6', 'qdbus')}
+                 'linux-wallpaperengine', 'Xvfb', 'xdotool', 'kpackagetool6', 'qdbus6', 'qdbus', 'gdbus')}
     modules = {name: importlib.util.find_spec(name) is not None for name in
                ('tkinter', 'playwright', 'moderngl', 'numpy', 'PIL', 'lz4')}
     return {'python': sys.executable, 'commands': commands, 'python_modules': modules,
+            'kde_tools': {name: find_tool(name) for name in ('qdbus6', 'kpackagetool6')},
             'desktop': {name: bool(os.environ.get(name)) for name in
                         ('DISPLAY', 'WAYLAND_DISPLAY')},
             'requirements': {
@@ -95,9 +97,10 @@ def apply_kde_wallpaper(output, log=print):
         raise ConversionError('KDE plugin lookup timed out. The exported MP4 is saved.') from e
     if installed.returncode:
         raise ConversionError('Install the included KDE plugin first: bash install.sh. The exported MP4 is saved.')
-    dbus = shutil.which('qdbus6') or shutil.which('qdbus')
-    if not dbus:
-        raise ConversionError('KDE integration needs qdbus6 (Arch package qt6-tools). The exported MP4 is saved.')
+    dbus = find_tool('qdbus6')
+    gdbus = shutil.which('gdbus') if not dbus else None
+    if not dbus and not gdbus:
+        raise ConversionError('KDE integration needs qdbus6 or gdbus (Mint package libglib2.0-bin). The exported MP4 is saved.')
     # JSON escaping preserves quotes, newlines and Unicode in filenames as JS strings.
     script = 'print((function() { try { var ds = desktops(); if (!ds.length) throw new Error("No Plasma desktops found");' + \
         'for (var i=0; i<ds.length; i++) { var d=ds[i]; d.wallpaperPlugin=' + json.dumps(plugin) + \
@@ -106,14 +109,25 @@ def apply_kde_wallpaper(output, log=print):
         'return JSON.stringify({ok:true, desktops:ds.length});' + \
         '} catch(e) { return JSON.stringify({ok:false, error:String(e)}); } })());'
     try:
-        result = subprocess.run([dbus, 'org.kde.plasmashell', '/PlasmaShell',
-                                 'org.kde.PlasmaShell.evaluateScript', script],
-                                capture_output=True, text=True, timeout=15)
+        command = ([dbus, 'org.kde.plasmashell', '/PlasmaShell',
+                    'org.kde.PlasmaShell.evaluateScript', script] if dbus else
+                   [gdbus, 'call', '--session', '--dest', 'org.kde.plasmashell',
+                    '--object-path', '/PlasmaShell', '--method',
+                    'org.kde.PlasmaShell.evaluateScript', script])
+        result = subprocess.run(command, capture_output=True, text=True, timeout=15)
     except subprocess.TimeoutExpired as e:
         raise ConversionError('Plasma did not respond. The MP4 is saved; desktop application could not be confirmed.') from e
     try:
-        response = json.loads(result.stdout)
-    except ValueError:
+        text = result.stdout
+        if gdbus:
+            # gdbus serializes the returned string as a GVariant tuple.
+            import ast
+            values = ast.literal_eval(text.strip())
+            if not isinstance(values, tuple) or len(values) != 1 or not isinstance(values[0], str):
+                raise ValueError('Unexpected Plasma D-Bus response')
+            text = values[0]
+        response = json.loads(text)
+    except (ValueError, SyntaxError):
         response = {}
     if result.returncode or not isinstance(response, dict) or response.get('ok') is not True:
         detail = response.get('error', '') if isinstance(response, dict) else ''
@@ -146,10 +160,9 @@ def automatic_output(source, directory=None, width=1920, height=1080, fps=30, se
     return result
 
 def require(name):
-    found = shutil.which(name)
+    found = find_tool(name)
     if not found:
-        if name=='Xvfb':raise ConversionError('Hidden scene export needs Xvfb. On Arch run: sudo pacman -S --needed xorg-server-xvfb')
-        raise ConversionError(f'Missing {name}. See README.md for installation commands.')
+        raise ConversionError(f'Missing {name}. {package_hint("kde" if name == "kpackagetool6" else name)}')
     return found
 
 def resolve(source):
@@ -639,7 +652,7 @@ def main():
         try:
             gui()
         except ImportError:
-            parser.exit(1, 'Error: GUI needs Tk. On Arch: sudo pacman -S --needed tk\n')
+            parser.exit(1, f'Error: GUI needs Tk. {package_hint("tk")}\n')
         except ConversionError as e:
             parser.exit(1, f'Error: {e}\n')
         return

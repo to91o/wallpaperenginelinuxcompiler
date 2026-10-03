@@ -54,7 +54,7 @@ class ExportTests(unittest.TestCase):
         output.touch()
         success = subprocess.CompletedProcess([], 0, '{"ok":true,"desktops":2}', '')
         with patch.object(app, 'require', return_value='kpackagetool6'), \
-             patch.object(app.shutil, 'which', return_value='qdbus6'), \
+             patch.object(app, 'find_tool', return_value='qdbus6'), \
              patch.object(app.subprocess, 'run', side_effect=[subprocess.CompletedProcess([], 0), success]) as run:
             messages = []
             app.apply_kde_wallpaper(output, messages.append)
@@ -63,7 +63,7 @@ class ExportTests(unittest.TestCase):
             self.assertIn('2 Plasma desktops', messages[0])
         failure = subprocess.CompletedProcess([], 0, '{"ok":false,"error":"No Plasma desktops found"}', '')
         with patch.object(app, 'require', return_value='kpackagetool6'), \
-             patch.object(app.shutil, 'which', return_value='qdbus6'), \
+             patch.object(app, 'find_tool', return_value='qdbus6'), \
              patch.object(app.subprocess, 'run', side_effect=[subprocess.CompletedProcess([], 0), failure]), \
              self.assertRaisesRegex(app.ConversionError, 'MP4 is saved'):
             app.apply_kde_wallpaper(output)
@@ -86,6 +86,19 @@ class ExportTests(unittest.TestCase):
         frame_size = 160 * 90 * 3
         self.assertEqual(len(raw), 5 * frame_size)
         self.assertNotEqual(raw[:frame_size], raw[-frame_size:])
+
+    def test_gdbus_fallback_checks_structured_plasma_response(self):
+        output = self.root / 'wallpaper.mp4'
+        output.touch()
+        response = subprocess.CompletedProcess([], 0, repr(('{"ok":true,"desktops":1}',)), '')
+        with patch.object(app, 'require', return_value='kpackagetool6'), \
+             patch.object(app, 'find_tool', return_value=None), \
+             patch.object(app.shutil, 'which', return_value='/usr/bin/gdbus'), \
+             patch.object(app.subprocess, 'run', side_effect=[subprocess.CompletedProcess([], 0), response]) as run:
+            app.apply_kde_wallpaper(output, lambda _: None)
+            command = run.call_args.args[0]
+            self.assertEqual(command[:3], ['/usr/bin/gdbus', 'call', '--session'])
+            self.assertIn(json.dumps(str(output)), command[-1])
 
     def test_hidden_scene_without_window_fails_and_cleans_up(self):
         self.project({'type': 'scene'})

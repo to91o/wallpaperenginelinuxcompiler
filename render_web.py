@@ -10,6 +10,7 @@ import tempfile
 import threading
 from urllib.parse import quote
 
+from platform_support import package_hint
 from playwright.sync_api import sync_playwright, Error as BrowserError
 
 
@@ -44,7 +45,7 @@ def render_web(entry, output, seconds, fps, width, height, crf, warmup,
                overwrite, supersample, log, cancel, hide_clock=False):
     ffmpeg = shutil.which('ffmpeg')
     if not ffmpeg:
-        raise RuntimeError('Missing ffmpeg. On Arch: sudo pacman -S --needed ffmpeg')
+        raise RuntimeError('Missing ffmpeg. ' + package_hint('ffmpeg'))
     root = entry.parent
     # For nested HTML entrypoints, serve the complete project, including sibling assets.
     for candidate in (entry.parent, *entry.parents):
@@ -74,7 +75,7 @@ def render_web(entry, output, seconds, fps, width, height, crf, warmup,
             try:
                 browser = pw.chromium.launch(**launch)
             except BrowserError as e:
-                raise RuntimeError('Chromium could not start. On Arch install chromium, or run .venv/bin/python -m playwright install chromium.\n' + str(e)) from e
+                raise RuntimeError('Chromium could not start. Install a compatible Chromium, or run .venv/bin/python -m playwright install chromium.\n' + str(e)) from e
             try:
                 page = browser.new_page(viewport={'width':width, 'height':height},
                                         device_scale_factor=supersample)
