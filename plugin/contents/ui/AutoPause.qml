@@ -6,6 +6,7 @@ Item {
     visible: false
     property bool pauseFullscreen: false
     property bool pauseMaximized: false
+    property bool pauseFocused: false
     property rect screenGeometry
     readonly property bool shouldPause: policy.shouldPause
     TaskManager.VirtualDesktopInfo { id: desktops }
@@ -26,5 +27,6 @@ Item {
         windowModel: tasks
         pauseFullscreen: root.pauseFullscreen
         pauseMaximized: root.pauseMaximized
+        pauseFocused: root.pauseFocused
     }
 }

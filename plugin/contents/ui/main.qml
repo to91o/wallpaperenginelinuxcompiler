@@ -21,10 +21,11 @@ WallpaperItem {
     }
     Loader {
         id: autoPause
-        active: Boolean(root.configuration.PauseFullscreen) || Boolean(root.configuration.PauseMaximized)
+        active: Boolean(root.configuration.PauseFullscreen) || Boolean(root.configuration.PauseMaximized) || Boolean(root.configuration.PauseFocused)
         source: "AutoPause.qml"
         onLoaded: {
             item.pauseFullscreen = Qt.binding(function() { return Boolean(root.configuration.PauseFullscreen); });
+            item.pauseFocused = Qt.binding(function() { return Boolean(root.configuration.PauseFocused); });
             item.pauseMaximized = Qt.binding(function() { return Boolean(root.configuration.PauseMaximized); });
             item.screenGeometry = Qt.binding(function() { return Qt.rect(root.Screen.virtualX, root.Screen.virtualY, root.Screen.width, root.Screen.height); });
         }

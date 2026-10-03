@@ -29,6 +29,7 @@ ScrollView {
     readonly property string libraryPath: normalizeFolder(cfg_LibraryFolder)
     readonly property url folderUrl: libraryPath.charAt(0) === "/"
         ? "file://" + encodeURI(libraryPath).replace(/#/g, "%23").replace(/\?/g, "%3F") : ""
+    property alias cfg_PauseFocused: optionPauseFocused.checked
     property alias cfg_PausePlayback: optionPausePlayback.checked
     property alias cfg_PauseFullscreen: optionPauseFullscreen.checked
     property alias cfg_PauseMaximized: optionPauseMaximized.checked
@@ -57,6 +58,7 @@ ScrollView {
             CheckBox { id: optionPausePlayback; text: "Pause video now" }
             CheckBox { id: optionPauseFullscreen; text: "Pause when a window is fullscreen" }
             CheckBox { id: optionPauseMaximized; text: "Pause when a window is maximized" }
+            CheckBox { id: optionPauseFocused; text: "Pause when an application window is focused" }
             CheckBox { id: optionPauseWhenHidden; text: "Pause when Plasma hides the wallpaper" }
             Label {
                 Layout.fillWidth: true

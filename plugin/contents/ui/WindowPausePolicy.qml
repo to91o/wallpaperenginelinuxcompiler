@@ -7,6 +7,7 @@ Item {
     property var windowModel
     property bool pauseFullscreen: false
     property bool pauseMaximized: false
+    property bool pauseFocused: false
     property int blockingWindows: 0
     readonly property bool shouldPause: blockingWindows > 0
     function update() {
@@ -24,7 +25,8 @@ Item {
             required property var model
             readonly property bool blocksWallpaper: !model.IsMinimized &&
                 ((root.pauseFullscreen && model.IsFullScreen) ||
-                 (root.pauseMaximized && model.IsMaximized))
+                 (root.pauseMaximized && model.IsMaximized) ||
+                 (root.pauseFocused && model.IsWindow && model.IsActive))
             onBlocksWallpaperChanged: Qt.callLater(root.update)
         }
         onObjectAdded: Qt.callLater(root.update)

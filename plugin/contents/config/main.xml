@@ -17,4 +17,5 @@
 <entry name="PauseFullscreen" type="Bool"><default>false</default></entry>
 <entry name="PauseMaximized" type="Bool"><default>false</default></entry>
 <entry name="PauseWhenHidden" type="Bool"><default>false</default></entry>
+<entry name="PauseFocused" type="Bool"><default>false</default></entry>
 </group></kcfg>

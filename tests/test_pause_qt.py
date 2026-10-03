@@ -11,7 +11,7 @@ except ImportError:
 
 if QGuiApplication:
     class Windows(QAbstractListModel):
-        names = {Qt.UserRole + 1: b'IsFullScreen', Qt.UserRole + 2: b'IsMaximized', Qt.UserRole + 3: b'IsMinimized'}
+        names = {Qt.UserRole + 1: b'IsFullScreen', Qt.UserRole + 2: b'IsMaximized', Qt.UserRole + 3: b'IsMinimized', Qt.UserRole + 4: b'IsActive', Qt.UserRole + 5: b'IsWindow'}
         def __init__(self):
             super().__init__(); self.flags = dict.fromkeys(self.names, False)
         def rowCount(self, parent=QModelIndex()): return 0 if parent.isValid() else 1
@@ -50,5 +50,19 @@ class PauseTests(unittest.TestCase):
         policy.setProperty('pauseMaximized', True)
         settle(); self.assertTrue(policy.property('shouldPause'))
         policy.setProperty('pauseMaximized', False)
+        settle(); self.assertFalse(policy.property('shouldPause'))
+        windows.change('IsMaximized', False)
+        windows.change('IsWindow', True)
+        windows.change('IsActive', True)
+        settle(); self.assertFalse(policy.property('shouldPause'))
+        policy.setProperty('pauseFocused', True)
+        settle(); self.assertTrue(policy.property('shouldPause'))
+        windows.change('IsActive', False)
+        settle(); self.assertFalse(policy.property('shouldPause'))
+        windows.change('IsActive', True)
+        windows.change('IsMinimized', True)
+        settle(); self.assertFalse(policy.property('shouldPause'))
+        windows.change('IsMinimized', False)
+        windows.change('IsWindow', False)
         settle(); self.assertFalse(policy.property('shouldPause'))
         engine.deleteLater(); app.processEvents()
